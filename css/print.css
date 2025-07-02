@@ -1,0 +1,26 @@
+@media print
+{    
+    .no-print, .no-print *
+    {
+        display: none !important;
+	
+    }
+	
+	.card-content.card-title, .card-content.card-title *
+	{
+		margin:-100px 0 50px !important;
+		padding:50px 0 !important;
+		position:absolute !important;
+		text-align: center !important;
+		font-size:48px !important;
+	}
+	#content, #content * {font-size:18px!important;}
+	
+	.card, .card * {font-size:18px!important;}
+	th, th * {border-bottom:2px solid #000000!important;}
+}
+	
+
+	
+	
+	

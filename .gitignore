@@ -1,0 +1,6 @@
+.idea
+.vscode
+.env
+.phpdoc
+*.csv
+.phpcs-cache

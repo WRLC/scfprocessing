@@ -1,0 +1,88 @@
+services:
+  scf-processing:
+    build: .
+    container_name: scf-processing
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - ./xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+      - ./error_reporting.ini:/usr/local/etc/php/conf.d/error_reporting.ini
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.scf-processing.rule=Host(`scf-processing.wrlc.localhost`)"
+      - "traefik.http.routers.scf-processing.tls=true"
+      - "traefik.http.routers.scf-processing.entrypoints=websecure"
+    environment:
+      CANNED_REPORTS: ${CANNED_REPORTS}
+      SCF_REFILE: ${SCF_REFILE}
+      API_KEY_INTERACTIVE: ${API_KEY_INTERACTIVE}
+      GOOGLE_SHEET: ${GOOGLE_SHEET}
+      DB_SERVERNAME: ${DB_SERVERNAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DBNAME: ${DB_DBNAME}
+      GC_SERVERNAME: ${GC_SERVERNAME}
+      GC_USERNAME: ${GC_USERNAME}
+      GC_PASSWORD: ${GC_PASSWORD}
+      GC_DBNAME: ${GC_DBNAME}
+      TEST_SERVERNAME: ${TEST_SERVERNAME}
+      TEST_USERNAME: ${TEST_USERNAME}
+      TEST_PASSWORD: ${TEST_PASSWORD}
+      TEST_DBNAME: ${TEST_DBNAME}
+      NEW_DB_SERVERNAME: ${NEW_DB_SERVERNAME}
+      NEW_DB_USERNAME: ${NEW_DB_USERNAME}
+      NEW_DB_PASSWORD: ${NEW_DB_PASSWORD}
+      NEW_DB_DBNAME: ${NEW_DB_DBNAME}
+      NEW_GC_SERVERNAME: ${NEW_GC_SERVERNAME}
+      NEW_GC_USERNAME: ${NEW_GC_USERNAME}
+      NEW_GC_PASSWORD: ${NEW_GC_PASSWORD}
+      NEW_GC_DBNAME: ${NEW_GC_DBNAME}
+    secrets:
+      - ssh_key
+      - gitconfig
+    networks:
+      - proxy
+
+  scf-processing-mariadb:
+    image: mariadb:10.5.12
+    container_name: scf-processing-mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: database
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3311:3306"
+    volumes:
+      - scf_processing_mariadb_data:/var/lib/mysql
+    networks:
+      - proxy
+
+  new-scf-processing-mariadb:
+    image: mariadb:10.5.12
+    container_name: new-scf-processing-mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: database
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3321:3306"
+    volumes:
+      - new_scf_processing_mariadb_data:/var/lib/mysql
+    networks:
+      - proxy
+
+secrets:
+  ssh_key:
+    file: ${SSH_KEY_FILE}
+  gitconfig:
+    file: ${GITCONFIG}
+
+volumes:
+  scf_processing_mariadb_data:
+  new_scf_processing_mariadb_data:
+
+networks:
+  proxy:
+    external: true
