@@ -5,8 +5,6 @@ services:
     working_dir: /app
     volumes:
       - ./:/app
-      - ./xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
-      - ./error_reporting.ini:/usr/local/etc/php/conf.d/error_reporting.ini
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.scf-processing.rule=Host(`scf-processing.wrlc.localhost`)"
