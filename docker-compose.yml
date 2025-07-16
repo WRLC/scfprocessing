@@ -41,9 +41,9 @@ services:
     networks:
       - proxy
 
-  scf-processing-mariadb:
-    image: mariadb:10.5.12
-    container_name: scf-processing-mariadb
+  scf-processing-mysql:
+    image: mysql:8.0
+    container_name: scf-processing-mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: database
@@ -52,13 +52,13 @@ services:
     ports:
       - "3311:3306"
     volumes:
-      - scf_processing_mariadb_data:/var/lib/mysql
+      - scf_processing_mysql_data:/var/lib/mysql
     networks:
       - proxy
 
-  new-scf-processing-mariadb:
-    image: mariadb:10.5.12
-    container_name: new-scf-processing-mariadb
+  new-scf-processing-mysql:
+    image: mysql:8.0
+    container_name: new-scf-processing-mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: database
@@ -67,7 +67,7 @@ services:
     ports:
       - "3321:3306"
     volumes:
-      - new_scf_processing_mariadb_data:/var/lib/mysql
+      - new_scf_processing_mysql_data:/var/lib/mysql
     networks:
       - proxy
 
@@ -78,8 +78,8 @@ secrets:
     file: ${GITCONFIG}
 
 volumes:
-  scf_processing_mariadb_data:
-  new_scf_processing_mariadb_data:
+  scf_processing_mysql_data:
+  new_scf_processing_mysql_data:
 
 networks:
   proxy:
