@@ -104,6 +104,7 @@ resource "azurerm_linux_web_app"  "main" {
 
   site_config {
     always_on = true
+    app_command_line = "./home/site/wwwroot/scripts/startup.sh"
     application_stack {
       php_version = "8.4"
     }
@@ -150,12 +151,18 @@ resource "azurerm_linux_web_app_slot" "stage" {
 
   site_config {
     always_on = true
+    app_command_line = "./home/site/wwwroot/scripts/startup.sh"
     application_stack {
       php_version = "8.4"
     }
   }
 
   app_settings = {
+    "CANNED_REPORTS"                        = var.canned_reports_api_key
+    "SCF_REFILE"                            = var.scf_refile_api_key
+    "API_KEY_INTERACTIVE"                   = var.api_key_interactive
+    "GOOGLE_SHEET"                          = var.google_sheet_id
+    "DB_SERVERNAME"                         = data.azurerm_mysql_flexible_server.existing.fqdn
     "DB_USERNAME"                           = mysql_user.stage.user
     "DB_PASSWORD"                           = random_password.stage.result
     "DB_DBNAME"                             = azurerm_mysql_flexible_database.stage.name
