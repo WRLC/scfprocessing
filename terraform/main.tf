@@ -104,7 +104,7 @@ resource "azurerm_linux_web_app"  "main" {
 
   site_config {
     always_on = true
-    app_command_line = "./home/site/wwwroot/scripts/startup.sh"
+    app_command_line = "bash /home/site/wwwroot/scripts/startup.sh"
     application_stack {
       php_version = "8.4"
     }
@@ -151,7 +151,7 @@ resource "azurerm_linux_web_app_slot" "stage" {
 
   site_config {
     always_on = true
-    app_command_line = "./home/site/wwwroot/scripts/startup.sh"
+    app_command_line = "bash /home/site/wwwroot/scripts/startup.sh"
     application_stack {
       php_version = "8.4"
     }
