@@ -120,6 +120,7 @@ resource "azurerm_linux_web_app"  "main" {
     "DB_PASSWORD"                           = random_password.prod.result
     "DB_DBNAME"                             = azurerm_mysql_flexible_database.prod.name
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.prod.connection_string
+    "PHP_INI_SCAN_DIR"                      = ":/home/site/wwwroot/ini"
   }
 
   sticky_settings {
@@ -167,6 +168,7 @@ resource "azurerm_linux_web_app_slot" "stage" {
     "DB_PASSWORD"                           = random_password.stage.result
     "DB_DBNAME"                             = azurerm_mysql_flexible_database.stage.name
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.stage.connection_string
+    "PHP_INI_SCAN_DIR"                      = ":/home/site/wwwroot/ini"
   }
 
   logs {
