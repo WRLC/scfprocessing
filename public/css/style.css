@@ -1,0 +1,18 @@
+.btn, .btn-large, .btn-small, .btn-floating, .btn-large, .btn-small, .btn-flat {
+    border-radius: 50px;
+}
+
+.card {border-radius:10px;}
+
+.bold {font-weight: bold!important;}
+
+.card .card-content .card-title {
+    display: block;
+    line-height: 32px;
+    margin-bottom: 8px;
+    margin: -24px -24px 20px;
+    border-radius: 10px 10px 0 0;
+    padding: 20px;
+}
+
+.no-shadow {box-shadow: none!important;}

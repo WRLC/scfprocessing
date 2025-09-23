@@ -1,0 +1,11 @@
+.idea
+.vscode
+.env
+.phpdoc
+*.csv
+.phpcs-cache
+
+backend.hcl
+.terraform
+tfplan
+terraform.tfvars

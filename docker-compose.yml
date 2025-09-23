@@ -1,0 +1,36 @@
+services:
+  scf-processing:
+    build: .
+    container_name: scf-processing
+    working_dir: /home/site/wwwroot
+    ports:
+      - "8080:8080"  # Azure Web Apps use port 8080
+    volumes:
+      - ./:/home/site/wwwroot
+    environment:
+      CANNED_REPORTS: ${CANNED_REPORTS}
+      SCF_REFILE: ${SCF_REFILE}
+      API_KEY_INTERACTIVE: ${API_KEY_INTERACTIVE}
+      GOOGLE_SHEET: ${GOOGLE_SHEET}
+      DB_SERVERNAME: "scf-processing-mysql"
+      DB_USERNAME: "user"
+      DB_PASSWORD: "password"
+      DB_DBNAME: "database"
+    depends_on:
+      - scf-processing-mysql
+
+  scf-processing-mysql:
+    image: mysql:8.0
+    container_name: scf-processing-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: database
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3330:3306"
+    volumes:
+      - scf_processing_mysql_data:/var/lib/mysql
+
+volumes:
+  scf_processing_mysql_data:
