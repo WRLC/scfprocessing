@@ -56,7 +56,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (substr($barcode, -1) !== 'X') {
         $barcode .= 'X'; // Append 'X' to the end of the barcode if it is missing
     }
-
+// Himmelfarb check: begins with 'p' and 6 characters
+if (strtolower(substr($barcode, 0, 1)) === 'p' && strlen($barcode) === 6) {
+    // If it begins with 'p' (case-insensitive), always add another X
+    $barcode .= 'X';
+}
 //// function to check the URL. Add above code.
     function getFinalRedirectUrl($url)
     {
