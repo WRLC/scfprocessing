@@ -489,7 +489,7 @@ $sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='CB') AND (plibrary
 	{ 
 	echo '<td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;">'.number_format($row['SUM(cccount)']);
 	
-	$clamshellsvalue= $row['SUM(cccount)']*2.65;
+	$clamshellsvalue= $row['SUM(cccount)']*1.50;
 	///echo '<br />($';	
 	///echo number_format($clamshellsvalue,2,".",",");
 	///echo ')';
@@ -583,7 +583,7 @@ echo '<br /><br />';
 $total = ($volumevalue + $oversizedvalue + $boxesvalue + $clamshellsvalue + $flatboxesvalue + $longboxesvalue + $srvalue + $wdvalue);
 echo '<h4 class="center">Total: $'.number_format($total,2,".",",").'</h4>';
 
-//// Connection will be closed in footer.php ////
+//// Close DB connection ////    
       echo '
       </div>
       </div>

@@ -56,7 +56,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && !empty($_POST['barcode'])) {
     if (substr($barcode, -1) !== 'X') {
         $barcode .= 'X'; // Append 'X' to the end of the barcode if it is missing
     }
-
+// Himmelfarb check: begins with 'p' and 6 characters
+if (strtolower(substr($barcode, 0, 1)) === 'p' && strlen($barcode) === 6) {
+    // If it begins with 'p' (case-insensitive), always add another X
+    $barcode .= 'X';
+}
     // Define variables
     $library = 'SCF'; // Replace LIBCODE with actual library code
     $circ_desk = 'DEFAULT_CIRC_DESK'; // Replace CIRCDESKCODE with actual circ desk code
