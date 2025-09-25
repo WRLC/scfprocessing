@@ -103,7 +103,7 @@ echo '<option value="'.$row['libname'].'">'.$row['libname'].'</option>';
               <button class="btn waves-effect waves-light right green" type="submit" >Create Location <i class="material-icons right">send</i> </button>
         
 			
-		<?php	mysqli_close($conn); ?>
+		<?php	// Connection will be closed in footer.php ?>
          </form></div>
         </div>
       </div>

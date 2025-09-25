@@ -583,8 +583,7 @@ echo '<br /><br />';
 $total = ($volumevalue + $oversizedvalue + $boxesvalue + $clamshellsvalue + $flatboxesvalue + $longboxesvalue + $srvalue + $wdvalue);
 echo '<h4 class="center">Total: $'.number_format($total,2,".",",").'</h4>';
 
-//// Close DB connection ////    
-mysqli_close($conn);
+//// Connection will be closed in footer.php ////
       echo '
       </div>
       </div>

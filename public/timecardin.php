@@ -58,7 +58,7 @@ $checkin_date = date('m/d/Y g:ia', $old_checkout_timestamp);
 
 }
 
-mysqli_close($conn);
+// Connection will be closed in footer.php
 
  if($CurrentTimeCard == $today) {
 	  

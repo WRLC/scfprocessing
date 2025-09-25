@@ -131,7 +131,7 @@ $formurl = 'hours_update.php'; ?>
               <button class="btn waves-effect waves-light right green" type="submit" >Update <i class="material-icons right">send</i> </button>
            '; }
 			
-			mysqli_close($conn);
+			// Connection will be closed in footer.php
           echo ' </form></div>
         </div>
       </div>

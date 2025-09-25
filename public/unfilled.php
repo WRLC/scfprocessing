@@ -102,7 +102,7 @@ $i = $i + 1;
 	
 }
 
-mysqli_close($conn);					
+// Connection will be closed in footer.php					
 					
 
 ?>

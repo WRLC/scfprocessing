@@ -268,10 +268,16 @@ $cf = $$cftext;
 $cf = $cf;
 
 $universitytotal = $z + $base;
-$percent = $universitytotal / $cf;
-$percent = round( $percent * 100 );
-$cfavailable = $cf - $universitytotal;
-$percentleft = 100 - $percent;
+if ($cf > 0) {
+    $percent = $universitytotal / $cf;
+    $percent = round( $percent * 100 );
+    $cfavailable = $cf - $universitytotal;
+    $percentleft = 100 - $percent;
+} else {
+    $percent = 0;
+    $cfavailable = 0;
+    $percentleft = 0;
+}
 
 //$testtotal = (int)$universitytotal;
 $displayuniversitytotal= number_format((float)$universitytotal, 1, '.', $thousands_sep = ',');
@@ -331,7 +337,7 @@ echo '</td>
 <td class="blue-grey white-text center" style="border-left:1px solid #eee;"><h5>'.$displayfinalused.' Cubic Feet Remaining('.$finalpercentleft.'%)</h5></td>
 </tr>';
 echo '</tbody></table>';
-mysqli_close($conn);
+// Connection will be closed in footer.php
 
       
     echo '  <p><br /><br />** 1000 cubic feet of storage can hold an average of 20,000 volumes or 700 archival boxes. However, these are only estimates. Actual storage quantity is based on width of volume, box size, and other factors.</p>

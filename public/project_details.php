@@ -376,9 +376,14 @@ $sql5 = "SELECT SUM(cccount) from ProcessingAll WHERE pcode = 'WD' AND plibrary 
                echo '<td class="blue-grey-text center" width="10%">'.$row5['SUM(cccount)'].'</td>';
             }
             $goal = $row['goal'];
-            $percentcompleted = $cccount / $goal;
-            $percent = round( $percentcompleted * 100 );
-           
+            if ($goal > 0) {
+                $percentcompleted = $cccount / $goal;
+                $percent = round( $percentcompleted * 100 );
+            } else {
+                $percentcompleted = 0;
+                $percent = 0;
+            }
+
 echo '</tr>';
         }
 echo '</tbody>
@@ -387,7 +392,7 @@ echo '</tbody>
 
 
 
-mysqli_close($conn);
+// Connection will be closed in footer.php
 
 echo '<!--JavaScript at end of body for optimized loading-->';
 include('footer.php'); ?>

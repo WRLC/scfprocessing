@@ -146,9 +146,9 @@ while ($row = mysqli_fetch_array($query))
 
 $name = $row['name'];
 	echo '<option value="'.$name.'">'.$name.'</option>';
-}	
-		
-mysqli_close($conn);				
+}
+
+// Connection will be closed in footer.php				
 ?>
           </select>
           <label>Select Staff</label>

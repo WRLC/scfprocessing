@@ -147,7 +147,7 @@ while ($row = mysqli_fetch_array($query))
               <button class="btn waves-effect waves-light right green" type="submit" >Update <i class="material-icons right">send</i> </button>
            ';
 			
-			mysqli_close($conn);
+
           echo ' </form></div>
         </div>
       </div>

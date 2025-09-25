@@ -115,7 +115,7 @@ while ($row = mysqli_fetch_array($query))
 {
 echo '<option value="'.$row['libname'].'">'.$row['libname'].'</option>';
 }
-mysqli_close($conn);					
+// Connection will be closed in footer.php
 ?>
                </select>
                  <span class="new badge white red-text right" data-badge-caption="Required"></span>
@@ -130,8 +130,8 @@ mysqli_close($conn);
 			  <a class="btn waves-effect waves-light left red" href="libraries_delete.php?id='.$id.'">Delete Location<i class="material-icons left">delete_forever</i></a>
               <button class="btn waves-effect waves-light right green" type="submit" >Update <i class="material-icons right">send</i> </button>
            ';
-			
-			mysqli_close($conn);
+
+			// Connection will be closed in footer.php
           echo ' </form></div>
         </div>
       </div>

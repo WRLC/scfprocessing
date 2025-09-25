@@ -379,7 +379,7 @@ while ($row = mysqli_fetch_array($query))
 			  <button class="btn waves-effect waves-light right green" type="submit" >Update <i class="material-icons right">send</i> </button>
            </div>';
 			
-			mysqli_close($conn);
+			// Connection will be closed in footer.php
           echo ' </form>
 		  </div>
         </div>

@@ -107,7 +107,7 @@ while ($row = mysqli_fetch_array($query))
 {
 echo '<option value="'.$row['university'].'">'.$row['university'].'</option>';
 }
-mysqli_close($conn);					
+// Connection will be closed in footer.php					
 ?>
                   </select>
                  <span class="new badge white red-text right" data-badge-caption="Required"></span>

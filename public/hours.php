@@ -396,8 +396,7 @@ $pay =  number_format($pay,2,".",",");
 
 echo '<h5 class="center" style="margin-top:-10px;">Estimated Pay: $'.$pay.'</h5>';
 }
-//// Close DB connection ////    
-mysqli_close($conn);
+//// Connection will be closed in footer.php ////
       echo '</tbody>
       </table>
       </div>
