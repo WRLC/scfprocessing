@@ -112,7 +112,7 @@ while ($row = mysqli_fetch_array($query))
 			</tr>';
 			
 }
-mysqli_close($conn);
+// Connection will be closed in footer.php
       echo '  </tbody>
       </table>
 				

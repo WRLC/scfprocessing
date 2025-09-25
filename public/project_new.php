@@ -124,7 +124,7 @@ while ($row = mysqli_fetch_array($query))
 {
 echo '<option value="'.$row['librarykey'].'">'.$row['university'].'</option>';
 }
-mysqli_close($conn);					
+// Connection will be closed in footer.php
 
                 echo '</select>
                
@@ -202,7 +202,7 @@ mysqli_close($conn);
               <button class="btn waves-effect waves-light right green" type="submit" >Create Project <i class="material-icons right">send</i> </button>
            ';
 			
-			mysqli_close($conn);
+			// Connection will be closed in footer.php
           echo ' </form></div>
         </div></div>
      

@@ -205,19 +205,25 @@ $worked = $hours2 + $mindecimal;
 $worked = number_format($worked, 2, '.', '');
 
 
-$average = $volumestotal / $worked;
-$average = number_format($average);
+if ($worked > 0) {
+    $average = $volumestotal / $worked;
+    $average = number_format($average);
+} else {
+    $average = 0;
+}
 $workcount = $workcount + 1;
 
 $value = $volumestotal * .75;
 $cost = $worked * 21;
-$ratio = $value / $cost;
+if ($cost > 0) {
+    $ratio = $value / $cost;
+} else {
+    $ratio = 0;
+}
 
-setlocale(LC_MONETARY, 'en_US');
-$cost = money_format('%(#10n', $cost);
+$cost = '$' . number_format($cost, 2);
 
-setlocale(LC_MONETARY, 'en_US');
-$value = money_format('%(#10n', $value);
+$value = '$' . number_format($value, 2);
 
 
 
@@ -361,17 +367,27 @@ $cctotal = 0;
  
  
  
-mysqli_close($conn);
+// Connection will be closed in footer.php
 
 /// Begin Weekly Stats
 
-$averagesum = $totalsum / $workedsum;
-$averagesum = number_format($averagesum);
+if ($workedsum > 0) {
+    $averagesum = $totalsum / $workedsum;
+    $averagesum = number_format($averagesum);
+} else {
+    $averagesum = 0;
+}
 
-$valuesum = money_format('%(#10n', $valuesum);
-$costsum = money_format('%(#10n', $costsum);
+// Calculate ratio before formatting
+if ($costsum > 0) {
+    $ratiosum = $valuesum / $costsum;
+} else {
+    $ratiosum = 0;
+}
 
-$ratiosum = $valuesum / $costsum;
+// Format for display
+$valuesum = '$' . number_format($valuesum, 2);
+$costsum = '$' . number_format($costsum, 2);
       
 	  
 	  echo '<div class="col s12 m12" style="position:absolute; margin-left:-10px; top:-700px;">

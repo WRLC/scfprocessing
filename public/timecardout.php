@@ -92,7 +92,7 @@ $checkout_date = date('m/d/Y g:ia', $old_checkout_timestamp);
   echo '</form>';
 
  
- mysqli_close($conn);
+ // Connection will be closed in footer.php
       ?>
 </div>
 </div>

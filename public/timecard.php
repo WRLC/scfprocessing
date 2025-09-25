@@ -86,7 +86,7 @@ $TimeCardInDisplay = date('m/d/Y g:ia', $TimeCardMatchDate);
  }
 }
 //End Loop
-mysqli_close($conn);
+// Connection will be closed in footer.php
 //if in current date matches Date in row, display that row's check in date, else display the button.
 		
 	 if($CheckedIn == $currentdate) {

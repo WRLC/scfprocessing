@@ -237,9 +237,12 @@ $value = $float2*1.70;
 $value2 = number_format($value, 2, '.', ',');
       
 
-$ratio = $value / $staffcost;
-
-$ratio = round($ratio);
+if ($staffcost > 0) {
+    $ratio = $value / $staffcost;
+    $ratio = round($ratio);
+} else {
+    $ratio = 0;
+}
 
        echo '<td class="blue-grey-text center">$'.$staffcost2.'</td>';
        echo '<td class="blue-grey-text center">$'.$value2.'</td>';
@@ -286,7 +289,7 @@ $ratio = round($ratio);
         </tr>';
 			
 }
-mysqli_close($conn);
+// Connection will be closed in footer.php
       echo '  </tbody>
       </table>
 	 </div>

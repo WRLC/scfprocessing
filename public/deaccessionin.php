@@ -163,8 +163,8 @@ while ($row3 = mysqli_fetch_array($query3))
     echo '<br />'.$row3['title'];
 
 }
-mysqli_close($conn);	
-      
+// Connection will be closed in footer.php
+
       
      
 

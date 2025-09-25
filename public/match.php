@@ -179,7 +179,7 @@ echo '<tr><td style="border-left:1px solid #ddd; min-width:150px;"><a name="'.$r
 }
 }
 
-mysqli_close($conn);
+// Connection will be closed in footer.php
 
 ?>
         </tbody>
