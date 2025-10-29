@@ -2,7 +2,7 @@
 
 ////////////define connection ////////////
 $connect = 'localhost';
-
+echo 'Testing before connection';
 ////////////connect to localhost ////////////
 if($connect == 'localhost') {
 
