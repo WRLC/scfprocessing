@@ -21,7 +21,7 @@
   <div class="row">
      <div class="col s12 push-m3 m6">
       <div class="card white lighten-1 mt-6">
-        <div class="card-content blue-text"> <span class="card-title">Staff Login - Test</span>
+        <div class="card-content blue-text"> <span class="card-title">Staff Login</span>
           <?php
 					
 					if ($_GET['login'] =='false') echo '<h3 class="card-title" style="color:#ee6e73;">Login failed.  Please try again.</h3>';
