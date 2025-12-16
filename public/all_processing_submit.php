@@ -8,7 +8,7 @@ $traytemp = filter_var($_POST['TrayLocation'], FILTER_SANITIZE_STRING);
 $TrayLocation = filter_var($_POST['TrayLocation'], FILTER_SANITIZE_STRING);
 $TrayLocation = !empty($TrayLocation) ? "'$TrayLocation'" : "NULL";
 
-echo $traytemp;
+// echo $traytemp;
 
 $sql = "SELECT ptraylocation FROM ProcessingAll WHERE ptraylocation = '$traytemp'";
 $i = 0;
