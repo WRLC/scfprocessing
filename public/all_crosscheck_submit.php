@@ -32,7 +32,7 @@ WHERE
 	
 	if ($conn->query($sql) === TRUE) {
 	header( 'Location: crosscheck.php?submit=true' ) ;
-    echo "success!";
+   // echo "success!";
 } else {
     echo "Error: " . $sql . "<br>" . $conn->error;
 }
