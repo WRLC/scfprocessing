@@ -4,6 +4,7 @@
 .phpdoc
 *.csv
 .phpcs-cache
+*.ndjson
 
 backend.hcl
 .terraform
