@@ -59,6 +59,6 @@ $dbname = $_ENV['TEST_DBNAME'] ?? getenv('TEST_DBNAME');
  	
 }
 
-
+date_default_timezone_set('America/New_York');
 
 ?>
