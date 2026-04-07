@@ -14,7 +14,7 @@
 <body class="grey lighten-3">
 <nav>
   <div class="nav-wrapper blue"> <img src="images/wrlc-logo-white.png" height="50px" style="margin:5px 0 0 20px; position:absolute;"> <a href="#" class="brand-logo" style="margin-left:90px;">SCF Processing</a> 
-<!--- Azure --->
+
   </div>
 </nav>
 
@@ -24,7 +24,14 @@
         <div class="card-content blue-text"> <span class="card-title">Staff Login</span>
           <?php
 					
-					if ($_GET['login'] =='false') echo '<h3 class="card-title" style="color:#ee6e73;">Login failed.  Please try again.</h3>';
+          $login = $_GET['login'] ?? '';
+
+          if ($login === 'false') {
+            echo '<h3 class="card-title" style="color:#ee6e73;">Login failed.  Please try again.</h3>';
+          }
+          
+          
+        
 					
 					?>
           <div class="row"> 
@@ -80,6 +87,7 @@ while ($row = mysqli_fetch_array($query))
 <!--  Scripts--> 
 <script src="https://code.jquery.com/jquery-2.1.1.min.js"></script> 
 <script src="js/materialize.js"></script> 
+<script src="js/init.js"></script> 
 <script>document.addEventListener('DOMContentLoaded', function() {
     var elems = document.querySelectorAll('select');
     var instances = M.FormSelect.init(elems, options);
