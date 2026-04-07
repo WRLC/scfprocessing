@@ -293,17 +293,5 @@ echo '<li><a href="deaccessionin.php"><i class="material-icons left">lock_open</
     <li><a href="#"><i class="material-icons left">account_circle</i><?php echo isset($_SESSION['user_id']) ? htmlspecialchars($_SESSION['user_id']) : 'Guest'; ?></a></li>
     <li><a href="kill_session.php"><i class="material-icons left">lock_open</i>Logout</a></li>
   </ul>
-  <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    var elems = document.querySelectorAll('.sidenav');
-    var instances = M.Sidenav.init(elems, options);
-  });
-
-  // Or with jQuery
-
-  $(document).ready(function(){
-    $('.sidenav').sidenav();
-  });
   
-  </script> 
 </div>
