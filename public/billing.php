@@ -1,613 +1,378 @@
 <?php
+declare(strict_types=1);
 session_start();
 
-if ( isset( $_SESSION['user_id'] ) ) {
-    // Grab user data from the database using the user_id
-    // Let them access the "logged in only" pages
-	$now = time(); // Checking the time now when home page starts.
-
-        if ($now > $_SESSION['expire']) {
-            session_destroy();
-            header("Location: login.php");
-        }
-	
-	
-} else {
-    // Redirect them to the login page
-    header("Location: login.php");
+if (!isset($_SESSION['user_id'], $_SESSION['expire'])) {
+    header('Location: login.php');
+    exit;
 }
-?>
-<?php include('header.php'); 
 
-$name = $_SESSION['user_id'];
+if (time() > (int) $_SESSION['expire']) {
+    session_destroy();
+    header('Location: login.php');
+    exit;
+}
 
+include 'header.php'; // assumes $conn is created here
 
-$submit = $_GET['submit'];
-$cardname = $_GET['name'];
-$beginurl = $_GET['begin'];
-$endurl = $_GET['end'];
-$selectedlibrary = $_GET['library'];
+if (!isset($conn) || !($conn instanceof mysqli)) {
+    throw new RuntimeException('Database connection is not available.');
+}
 
+$userId = (string) $_SESSION['user_id'];
 
+$beginInput       = trim((string) filter_input(INPUT_GET, 'begin', FILTER_DEFAULT));
+$endInput         = trim((string) filter_input(INPUT_GET, 'end', FILTER_DEFAULT));
+$selectedLibrary  = trim((string) filter_input(INPUT_GET, 'library', FILTER_DEFAULT));
 
-$beginurformatted = date("Y-m-d", strtotime($beginurl));
-$endurlformattted = date("Y-m-d", strtotime($endurl));
+$beginFormatted = null;
+$endFormatted   = null;
 
-if((isset($beginurl) AND $beginurl != '') AND (isset($endurl) AND $endurl != ''))
+if ($beginInput !== '') {
+    $beginTs = strtotime($beginInput);
+    if ($beginTs !== false) {
+        $beginFormatted = date('Y-m-d', $beginTs);
+    }
+}
 
+if ($endInput !== '') {
+    $endTs = strtotime($endInput);
+    if ($endTs !== false) {
+        $endFormatted = date('Y-m-d', $endTs);
+    }
+}
+
+$hasDateRange = ($beginFormatted !== null && $endFormatted !== null);
+
+$rateMap = [
+    'volumes'     => 0.75,
+    'oversized'   => 0.75,
+    'boxes'       => 2.65,
+    'clamshells'  => 1.50,
+    'flat_boxes'  => 2.65,
+    'long_boxes'  => 2.65,
+    'shelf'       => 2.00,
+    'deaccession' => 1.70,
+];
+
+$totals = [
+    'volumes'     => 0,
+    'oversized'   => 0,
+    'boxes'       => 0,
+    'clamshells'  => 0,
+    'flat_boxes'  => 0,
+    'long_boxes'  => 0,
+    'shelf'       => 0,
+    'deaccession' => 0,
+];
+
+$libraries = [];
+$rowsByLibrary = [];
+
+/**
+ * Fetch library list
+ */
+$librarySql = 'SELECT university FROM LibraryLocations';
+$params = [];
+$types  = '';
+
+if ($selectedLibrary !== '') {
+    $librarySql .= ' WHERE university = ?';
+    $params[] = $selectedLibrary;
+    $types   .= 's';
+}
+
+$librarySql .= ' ORDER BY university ASC';
+
+$stmt = $conn->prepare($librarySql);
+if (!$stmt) {
+    throw new RuntimeException('Prepare failed: ' . $conn->error);
+}
+
+if ($types !== '') {
+    $stmt->bind_param($types, ...$params);
+}
+
+$stmt->execute();
+$result = $stmt->get_result();
+
+while ($row = $result->fetch_assoc()) {
+    $libraries[] = $row['university'];
+}
+
+$stmt->close();
+
+/**
+ * Aggregate all counts in one query
+ */
+$reportSql = "
+    SELECT
+        plibrary,
+        COALESCE(SUM(CASE WHEN pcode NOT IN ('BX','SR','RB','XX','CB','GB','LB','WD') THEN cccount ELSE 0 END), 0) AS volumes,
+        COALESCE(SUM(CASE WHEN pcode = 'XX' THEN cccount ELSE 0 END), 0) AS oversized,
+        COALESCE(SUM(CASE WHEN pcode IN ('RB','BX') THEN cccount ELSE 0 END), 0) AS boxes,
+        COALESCE(SUM(CASE WHEN pcode = 'CB' THEN cccount ELSE 0 END), 0) AS clamshells,
+        COALESCE(SUM(CASE WHEN pcode = 'GB' THEN cccount ELSE 0 END), 0) AS flat_boxes,
+        COALESCE(SUM(CASE WHEN pcode = 'LB' THEN cccount ELSE 0 END), 0) AS long_boxes,
+        COALESCE(SUM(CASE WHEN pcode = 'SR' THEN cccount ELSE 0 END), 0) AS shelf,
+        COALESCE(SUM(CASE WHEN pcode = 'WD' THEN cccount ELSE 0 END), 0) AS deaccession
+    FROM ProcessingAll
+    WHERE plibrary <> 'WRLC Books (OUP)'
+";
+
+$reportParams = [];
+$reportTypes  = '';
+
+if ($selectedLibrary !== '') {
+    $reportSql .= " AND plibrary = ?";
+    $reportParams[] = $selectedLibrary;
+    $reportTypes   .= 's';
+}
+
+if ($hasDateRange) {
+    $reportSql .= " AND cctimestamp BETWEEN ? AND ?";
+    $reportParams[] = $beginFormatted . ' 00:00:00';
+    $reportParams[] = $endFormatted . ' 23:59:59';
+    $reportTypes   .= 'ss';
+}
+
+$reportSql .= " GROUP BY plibrary ORDER BY plibrary ASC";
+
+$stmt = $conn->prepare($reportSql);
+if (!$stmt) {
+    throw new RuntimeException('Prepare failed: ' . $conn->error);
+}
+
+if ($reportTypes !== '') {
+    $stmt->bind_param($reportTypes, ...$reportParams);
+}
+
+$stmt->execute();
+$result = $stmt->get_result();
+
+while ($row = $result->fetch_assoc()) {
+    $library = $row['plibrary'];
+
+    $rowsByLibrary[$library] = [
+        'volumes'     => (int) $row['volumes'],
+        'oversized'   => (int) $row['oversized'],
+        'boxes'       => (int) $row['boxes'],
+        'clamshells'  => (int) $row['clamshells'],
+        'flat_boxes'  => (int) $row['flat_boxes'],
+        'long_boxes'  => (int) $row['long_boxes'],
+        'shelf'       => (int) $row['shelf'],
+        'deaccession' => (int) $row['deaccession'],
+    ];
+
+    foreach ($totals as $key => $value) {
+        $totals[$key] += $rowsByLibrary[$library][$key];
+    }
+}
+
+$stmt->close();
+
+$values = [];
+$grandTotal = 0.00;
+
+foreach ($totals as $key => $count) {
+    $values[$key] = $count * $rateMap[$key];
+    $grandTotal += $values[$key];
+}
+
+function displayCell(int $value): string
 {
-$daterange = ' AND (cctimestamp BETWEEN "'.$beginurformatted.' 00:00:00" AND "'.$endurlformattted.' 23:59:59") ';
+    return $value > 0 ? number_format($value) : '';
 }
-else { 
-$daterange ='';
-}
-
 ?>
-
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
-  <link rel="stylesheet" href="/resources/demos/style.css">
-  <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
-  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+<script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 
 <script>
-  $( function() {
-    $( "#datepicker" ).datepicker();
-  } );
-  
-  
-   $( function() {
-    $( "#datepicker2" ).datepicker();
-  } );
-  
-  
-  </script>
+$(function () {
+    $("#datepicker, #datepicker2").datepicker();
+});
+</script>
 
 <div>
-<div class="row">
-<div class="col s12 push-m1 m10"><br /><br /><br />
-<div class="no-print">
-</div>
-<div class="card white lighten-1">
-<div class="no-print">
- <ul class="collapsible">
-    <li>
-      <div class="collapsible-header grey-text lighten-4"><i class=" material-icons blue-grey-text">date_range</i><i class=" material-icons blue-grey-text">business</i>FILTER</div>
-      <div class="collapsible-body">
-      <span>
-      
-     <form method="get">
-	<div class="input-field col s6"> <i class="material-icons blue-grey-text prefix">date_range</i>
-				<input name="begin" id="datepicker"
-                
-                <?php
-				
-				if(isset($beginurl) and $beginurl !='') echo 'value="'.$beginurl.'"'; 
-				//else echo 'value=""';
-				
-				?>
-                
-                 type="text" class="validate">
-				<label for="icon_prefix3">Start Date</label>
-                   </div>
-			
-				<div class="input-field col s6"> <i class="material-icons indigo-text prefix">date_range</i>
-				<input name="end" id="datepicker2"
-                
-                 <?php
-				
-				if(isset($endurl) and $endurl !='') echo 'value="'.$endurl.'"'; 
-				//else echo 'value=""';
-				
-				?>
-                
-                
-                              
-                
-                 type="text" class="validate">
-                 <label for="icon_prefix3">End Date</label>
-                  </div>
-                  
-                  
-                  
-                  
-                  <div class="row">
-                <div class="input-field col s6"> <i class="material-icons blue-grey-text prefix">business</i>
-                  <select name="library">
-                   
-                    <?php
-					
-					if(isset($selectedlibrary) AND $selectedlibrary != '')
-					
-					echo ' <option value="'.$selectedlibrary.'" selected>'.$selectedlibrary.'</option>
-					<option value="">All Libraries</option>';
-					else
-				echo ' <option value="" disabled selected>All Libraries</option>';	
-					
-	  /////Get Staff information	  
-$sql = "SELECT university from LibraryLocations order by university ASC";
-$query 	= mysqli_query($conn, $sql);
-while ($row = mysqli_fetch_array($query))
+    <div class="row">
+        <div class="col s12 push-m1 m10"><br><br><br>
+            <div class="no-print"></div>
 
-{				
+            <div class="card white lighten-1">
+                <div class="no-print">
+                    <ul class="collapsible">
+                        <li>
+                            <div class="collapsible-header grey-text lighten-4">
+                                <i class="material-icons blue-grey-text">date_range</i>
+                                <i class="material-icons blue-grey-text">business</i>
+                                FILTER
+                            </div>
+                            <div class="collapsible-body">
+                                <span>
+                                    <form method="get">
+                                        <div class="input-field col s6">
+                                            <i class="material-icons blue-grey-text prefix">date_range</i>
+                                            <input
+                                                name="begin"
+                                                id="datepicker"
+                                                type="text"
+                                                class="validate"
+                                                value="<?= htmlspecialchars($beginInput, ENT_QUOTES, 'UTF-8') ?>"
+                                            >
+                                            <label for="datepicker">Start Date</label>
+                                        </div>
 
-$library = $row['university'];
-					
-		echo '<option value="'.$library.'">'.$library.'</option>';
-	
-}			
-	//mysqli_close($conn);				
-					
-					
+                                        <div class="input-field col s6">
+                                            <i class="material-icons indigo-text prefix">date_range</i>
+                                            <input
+                                                name="end"
+                                                id="datepicker2"
+                                                type="text"
+                                                class="validate"
+                                                value="<?= htmlspecialchars($endInput, ENT_QUOTES, 'UTF-8') ?>"
+                                            >
+                                            <label for="datepicker2">End Date</label>
+                                        </div>
 
+                                        <div class="row">
+                                            <div class="input-field col s6">
+                                                <i class="material-icons blue-grey-text prefix">business</i>
+                                                <select name="library">
+                                                    <option value="" <?= $selectedLibrary === '' ? 'selected' : '' ?>>All Libraries</option>
+                                                    <?php foreach ($libraries as $library): ?>
+                                                        <option
+                                                            value="<?= htmlspecialchars($library, ENT_QUOTES, 'UTF-8') ?>"
+                                                            <?= $selectedLibrary === $library ? 'selected' : '' ?>
+                                                        >
+                                                            <?= htmlspecialchars($library, ENT_QUOTES, 'UTF-8') ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <label>Select Library</label>
+                                            </div>
+                                        </div>
 
-?>
-                  </select>
-                  <label>Select Library</label>
+                                        <div style="border-bottom:1px solid #eee;" class="input-field col s12">
+                                            <?php if ($beginInput !== '' || $endInput !== '' || $selectedLibrary !== ''): ?>
+                                                <a class="btn waves-effect waves-light left red" href="billing.php">
+                                                    Clear <i class="material-icons left">clear</i>
+                                                </a>
+                                            <?php endif; ?>
+
+                                            <button class="btn waves-effect waves-light right green" type="submit">
+                                                Filter <i class="material-icons right">filter_list</i>
+                                            </button>
+                                        </div>
+                                    </form>
+
+                                    <br><br><br>
+                                </span>
+                            </div>
+                        </li>
+                    </ul>
                 </div>
-              </div>
-                  
-                  
-				  
-				
-	 
-		<div style="border-bottom:1px solid #eee;" class="input-field col s12">		  
-			       
- 
-       
-			 <?php
-			 
-			 if(isset($beginurl) AND isset($endurl)) {
-				 echo '<a class="btn waves-effect waves-light left red" href="billing.php">Clear <i class="material-icons left">clear</i></a>';
-				 
-			 } 
-			 
-			 echo ' <button class="btn waves-effect waves-light right green" type="submit" >Filter <i class="material-icons right">filter_list</i> </button>';
-			 
-			 ?>
-		
-</form>
 
-<br />
-<br />
-<br />
-      
-      
+                <div style="padding:24px 13px!important;" class="card-content blue-grey-text">
+                    <span class="card-title center">SCF Billing Counts Report</span>
+
+                    <?php if ($selectedLibrary !== ''): ?>
+                        <span class="card-title center"><?= htmlspecialchars($selectedLibrary, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endif; ?>
+
+                    <?php if ($hasDateRange): ?>
+                        <div class="print center" style="margin:20px 0;">
+                            <?= htmlspecialchars($beginInput, ENT_QUOTES, 'UTF-8') ?> -
+                            <?= htmlspecialchars($endInput, ENT_QUOTES, 'UTF-8') ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="row">
+                        <table class="striped" style="border:2px solid #ccc!important;">
+                            <thead>
+                                <tr>
+                                    <th class="blue-grey white-text center">Library</th>
+                                    <th class="blue-grey white-text center">Volumes</th>
+                                    <th class="blue-grey white-text center">Oversized Books</th>
+                                    <th class="blue-grey white-text center">Boxes</th>
+                                    <th class="blue-grey white-text center">Clamshells</th>
+                                    <th class="blue-grey white-text center">Flat Boxes</th>
+                                    <th class="blue-grey white-text center">Long Boxes</th>
+                                    <th class="blue-grey white-text center">Shelf Rentals</th>
+                                    <th class="blue-grey white-text center">Deaccessioned</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($rowsByLibrary as $library => $counts): ?>
+                                    <?php
+                                    $rowTotal = array_sum($counts);
+                                    if ($rowTotal === 0) {
+                                        continue;
+                                    }
+                                    ?>
+                                    <tr>
+                                        <td style="border-left:1px solid #eee;"><?= htmlspecialchars($library, ENT_QUOTES, 'UTF-8') ?></td>
+                                        <td class="center" style="border-left:1px solid #eee;"><?= displayCell($counts['volumes']) ?></td>
+                                        <td class="center" style="border-left:1px solid #eee;"><?= displayCell($counts['oversized']) ?></td>
+                                        <td class="center" style="border-left:1px solid #eee;"><?= displayCell($counts['boxes']) ?></td>
+                                        <td class="center" style="border-left:1px solid #eee;"><?= displayCell($counts['clamshells']) ?></td>
+                                        <td class="center" style="border-left:1px solid #eee;"><?= displayCell($counts['flat_boxes']) ?></td>
+                                        <td class="center" style="border-left:1px solid #eee;"><?= displayCell($counts['long_boxes']) ?></td>
+                                        <td class="center" style="border-left:1px solid #eee;"><?= displayCell($counts['shelf']) ?></td>
+                                        <td class="center" style="border-left:1px solid #eee;"><?= displayCell($counts['deaccession']) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+
+                                <tr>
+                                    <td style="border-top:2px solid #ccc; border-bottom:2px solid #ccc;" class="green black-text lighten-4">Total Count:</td>
+                                    <td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;"><?= number_format($totals['volumes']) ?></td>
+                                    <td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;"><?= number_format($totals['oversized']) ?></td>
+                                    <td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;"><?= number_format($totals['boxes']) ?></td>
+                                    <td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;"><?= number_format($totals['clamshells']) ?></td>
+                                    <td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;"><?= number_format($totals['flat_boxes']) ?></td>
+                                    <td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;"><?= number_format($totals['long_boxes']) ?></td>
+                                    <td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;"><?= number_format($totals['shelf']) ?></td>
+                                    <td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;"><?= number_format($totals['deaccession']) ?></td>
+                                </tr>
+
+                                <tr>
+                                    <th class="green darken-1 white-text">Value:</th>
+                                    <th class="green darken-1 white-text center">$<?= number_format($values['volumes'], 2) ?></th>
+                                    <th class="green darken-1 white-text center">$<?= number_format($values['oversized'], 2) ?></th>
+                                    <th class="green darken-1 white-text center">$<?= number_format($values['boxes'], 2) ?></th>
+                                    <th class="green darken-1 white-text center">$<?= number_format($values['clamshells'], 2) ?></th>
+                                    <th class="green darken-1 white-text center">$<?= number_format($values['flat_boxes'], 2) ?></th>
+                                    <th class="green darken-1 white-text center">$<?= number_format($values['long_boxes'], 2) ?></th>
+                                    <th class="green darken-1 white-text center">$<?= number_format($values['shelf'], 2) ?></th>
+                                    <th class="green darken-1 white-text center">$<?= number_format($values['deaccession'], 2) ?></th>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <br><br>
+                        <h4 class="center">Total: $<?= number_format($grandTotal, 2) ?></h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-</div> 
-      
-</span></div>
-</li>
- </ul>
 
-<div style="padding:24px 13px!important;" class="card-content blue-grey-text">
-
-<span class="card-title center">SCF Billing Counts Report</span>
 <?php
-
-if(isset($selectedlibrary) AND $selectedlibrary != '')
-echo '<span class="card-title center">'.$selectedlibrary.'</span>';
-
-if((isset($beginurl) AND $beginurl != '') AND (isset($endurl) AND $endurl != '')) {
- echo '<div class="print center" style="margin:20px 0;">'.$beginurl.' - '.$endurl.'</div>';
-}
+mysqli_close($conn);
+include 'footer.php';
 ?>
 
-<div class="row">
-<style>
-#hideMe {
-    -moz-animation: cssAnimation 0s ease-in 3s forwards;
-    /* Firefox */
-    -webkit-animation: cssAnimation 0s ease-in 3s forwards;
-    /* Safari and Chrome */
-    -o-animation: cssAnimation 0s ease-in 3s forwards;
-    /* Opera */
-    animation: cssAnimation 0s ease-in 3s forwards;
-    -webkit-animation-fill-mode: forwards;
-    animation-fill-mode: forwards;
-}
-@keyframes cssAnimation {
-    to {
-        width:0;
-        height:0;
-        overflow:hidden;
-    }
-}
-@-webkit-keyframes cssAnimation {
-    to {
-        width:0;
-        height:0;
-        visibility:hidden;
-    }
-}
-</style>
-
-
-<table class="striped" style="border:2px solid #ccc!important;">
-<thead>
-<tr><th class="blue-grey white-text center">Library</th><th class="blue-grey white-text center">Volumes</th><th class="blue-grey white-text center">Oversized Books</th><th class="blue-grey white-text center">Boxes</th><th class="blue-grey white-text center">Clamshells</th><th class="blue-grey white-text center">Flat Boxes</th><th class="blue-grey white-text center">Long Boxes</th><th class="blue-grey white-text center">Shelf Rentals</th><th class="blue-grey white-text center">Deaccessioned</th></tr>
-</thead>
-<tbody>
-<?php
-
-
-if(isset($selectedlibrary) and $selectedlibrary !='')
-$sql = "SELECT university from LibraryLocations WHERE university = '$selectedlibrary' order by university ASC";
-else
-$sql = "SELECT university from LibraryLocations order by university ASC";
-
-///// Get Library Locations /////////
-//$sql = "SELECT university from LibraryLocations WHERE university ='American Books'";
-$query = mysqli_query($conn, $sql);
-while ($row = mysqli_fetch_array($query))
-
-{
-	
-	//if(isset($selectedlibrary) and $selectedlibrary !='')
-//	
-//	$library = $selectedlibrary;
-//	
-//	else
-	
-	$library = $row['university'];
-		
-	
-///// Names ///////
-	$sqlname = "SELECT plibrary,SUM(cccount) FROM ProcessingAll WHERE plibrary = '$library' $daterange";
-	$queryname = mysqli_query($conn, $sqlname);
-while ($rowname = mysqli_fetch_array($queryname))
-{ 
-
-//echo $rowname['SUM(cccount)'];
-
-if(isset($rowname['SUM(cccount)']) AND $rowname['plibrary'] !=='WRLC Books (OUP)')  {
-	
-	$show ='true';
-echo '<tr><td style="border-left:1px solid #eee;">'.$library.'</td>';
-
-}
-	
-///// Volumes without special counts ///////
-	$sqlsum = "SELECT plibrary,SUM(cccount) FROM ProcessingAll WHERE (pcode <>'BX' AND pcode <>'SR' AND pcode <> 'RB' AND pcode <> 'XX' AND pcode <> 'CB' AND pcode <> 'GB' AND pcode <> 'LB' AND pcode <> 'WD') AND (plibrary = '$library') $daterange";
-	$querysum = mysqli_query($conn, $sqlsum);
-while ($rowsum = mysqli_fetch_array($querysum))
-{ 
-if($rowsum['SUM(cccount)'] > 0 AND $rowsum['plibrary'] !=='WRLC Books (OUP)') {
-echo '<td class="center" style="border-left:1px solid #eee;">'.number_format($rowsum['SUM(cccount)']).'</td>';
-}
-else 
-{
-if($show == 'true')
-echo '<td style="border-left:1px solid #eee;"></td>';
-}
-}
-
-
-////// Oversized  /////////
-
-$sqlXX = "SELECT plibrary, SUM(cccount) FROM ProcessingAll WHERE (pcode ='XX') AND (plibrary = '$library') $daterange";
-	$queryXX = mysqli_query($conn, $sqlXX);
-while ($rowXX = mysqli_fetch_array($queryXX))
-
-{ 
-
-if($rowXX['SUM(cccount)'] > 0 AND $rowXX['plibrary'] !=='WRLC Books (OUP)')
-echo '<td class="center" style="border-left:1px solid #eee;">'.number_format($rowXX['SUM(cccount)']).'</td>';
-else 
-{
-if($show == 'true')
-echo '<td style="border-left:1px solid #eee;"></td>';
-}
-}
-
-////// Boxes  /////////
-
-$sqlBX = "SELECT plibrary, SUM(cccount) FROM ProcessingAll WHERE (pcode ='RB' or pcode ='BX') AND (plibrary = '$library') $daterange";
-	$queryBX = mysqli_query($conn, $sqlBX);
-while ($rowBX = mysqli_fetch_array($queryBX))
-
-{ 
-
-if($rowBX['SUM(cccount)'] > 0 AND $rowBX['plibrary'] !=='WRLC Books (OUP)')
-echo '<td class="center" style="border-left:1px solid #eee;">'.number_format($rowBX['SUM(cccount)']).'</td>';
-else 
-{
-if($show == 'true')
-echo '<td style="border-left:1px solid #eee;"></td>';
-}
-}
-
-
-////// Clamshells  /////////
-
-$sqlCB = "SELECT plibrary, SUM(cccount) FROM ProcessingAll WHERE (pcode ='CB') AND (plibrary = '$library') $daterange";
-	$queryCB = mysqli_query($conn, $sqlCB);
-while ($rowCB = mysqli_fetch_array($queryCB))
-
-{ 
-
-if($rowCB['SUM(cccount)'] > 0 AND $rowCB['plibrary'] !=='WRLC Books (OUP)')
-echo '<td class="center" style="border-left:1px solid #eee;">'.number_format($rowCB['SUM(cccount)']).'</td>';
-else 
-{
-if($show == 'true')
-echo '<td style="border-left:1px solid #eee;"></td>';
-}
-}
-
-////// Flat Boxes  /////////
-
-$sqlGB = "SELECT plibrary, SUM(cccount) FROM ProcessingAll WHERE (pcode ='GB') AND (plibrary = '$library') $daterange";
-	$queryGB = mysqli_query($conn, $sqlGB);
-while ($rowGB = mysqli_fetch_array($queryGB))
-
-{ 
-
-if($rowGB['SUM(cccount)'] > 0 AND $rowGB['plibrary'] !=='WRLC Books (OUP)')
-echo '<td class="center" style="border-left:1px solid #eee;">'.number_format($rowGB['SUM(cccount)']).'</td>';
-else 
-{
-if($show == 'true')
-echo '<td style="border-left:1px solid #eee;"></td>';
-}
-}
-
-////// Long Boxes  /////////
-
-$sqlLB = "SELECT plibrary, SUM(cccount) FROM ProcessingAll WHERE (pcode ='LB') AND (plibrary = '$library') $daterange";
-	$queryLB = mysqli_query($conn, $sqlLB);
-while ($rowLB = mysqli_fetch_array($queryLB))
-
-{ 
-
-if($rowLB['SUM(cccount)'] > 0 AND $rowLB['plibrary'] !=='WRLC Books (OUP)')
-echo '<td class="center" style="border-left:1px solid #eee; border-right:1px solid #eee;">'.number_format($rowLB['SUM(cccount)']).'</td>';
-else 
-{
-if($show == 'true')
-echo '<td style="border-left:1px solid #eee; border-right:1px solid #eee;"></td>';
-}
-}
-
-////// Shelf Rentals /////////
-
-$sqlLB = "SELECT plibrary, SUM(cccount) FROM ProcessingAll WHERE (pcode ='SR') AND (plibrary = '$library') $daterange";
-	$queryLB = mysqli_query($conn, $sqlLB);
-while ($rowLB = mysqli_fetch_array($queryLB))
-
-{ 
-
-if($rowLB['SUM(cccount)'] > 0 AND $rowLB['SUM(cccount)'] !=='' AND $rowLB['plibrary'] !=='WRLC Books (OUP)')
-echo '<td class="center" style="border-left:1px solid #eee; border-right:1px solid #eee;">'.number_format($rowLB['SUM(cccount)']).'</td>';
-else 
-{
-if($show == 'true')
-echo '<td style="border-left:1px solid #eee; border-right:1px solid #eee;"></td>';
-}
-}
-
-
-////// Deasseccioned materials  /////////
-
-$sqlWD = "SELECT plibrary, SUM(cccount) FROM ProcessingAll WHERE pcode ='WD' AND (plibrary = '$library') $daterange";
-	$queryWD = mysqli_query($conn, $sqlWD);
-while ($rowWD = mysqli_fetch_array($queryWD))
-
-{ 
-
-if($rowWD['SUM(cccount)'] > 0 AND $rowWD['plibrary'] !=='WRLC Books (OUP)')
-echo '<td class="center" style="border-left:1px solid #eee;">'.number_format($rowWD['SUM(cccount)']).'</td>';
-else 
-{
-if($show == 'true')
-echo '<td style="border-left:1px solid #eee;"></td>';
-}
-}
-
-
-{ 
-if($show == 'true')
-echo '</tr>';
-}
-
-}
-	$show ='false';
-}
-
-
-echo '<tr><td style="border-top:2px solid #ccc; border-bottom:2px solid #ccc;" class="green black-text lighten-4">Total Count:</td>';
-
-/////Volumes Total ///////
-
-if(isset($selectedlibrary) AND $selectedlibrary !='')
-
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode <>'BX' AND pcode <>'SR' AND pcode <>'WD' AND pcode <> 'RB' AND pcode <> 'XX' AND pcode <> 'CB' AND pcode <> 'GB' AND pcode <> 'LB') AND (plibrary = '$selectedlibrary') $daterange";
-
-else
-
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode <>'BX' AND pcode <>'SR' AND pcode <>'WD' AND pcode <> 'RB' AND pcode <> 'XX' AND pcode <> 'CB' AND pcode <> 'GB' AND pcode <> 'LB') AND (plibrary != 'WRLC Books (OUP)') $daterange";
-
-
-
-//$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (plibrary != 'WRLC Books (OUP)') $daterange";
-	$query = mysqli_query($conn, $sql);
-	while ($row = mysqli_fetch_array($query))
-	{ 
-	echo '<td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;">'.number_format($row['SUM(cccount)']);
-	
-	$volumevalue= $row['SUM(cccount)']*.75;
-	///echo '<br />($';	
-	///echo number_format($volumevalue,2,".",",");
-	///echo ')';
-	echo '</td>';
-	}
-
-/////Oversized Total ///////
-
-
-if(isset($selectedlibrary) AND $selectedlibrary !='')
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='XX') AND (plibrary = '$selectedlibrary') $daterange";
-else
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='XX') AND (plibrary != 'WRLC Books (OUP)') $daterange";
-
-	$query = mysqli_query($conn, $sql);
-	while ($row = mysqli_fetch_array($query))
-	{ 
-	echo '<td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;">'.number_format($row['SUM(cccount)']);
-	
-	$oversizedvalue= $row['SUM(cccount)']*.75;
-	///echo '<br />($';	
-	///echo number_format($oversizedvalue,2,".",",");
-	///echo ')';
-	echo '</td>';
-	}
-	
-/////Boxes Total ///////
-
-if(isset($selectedlibrary) AND $selectedlibrary !='')
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='RB' or pcode ='BX') AND (plibrary = '$selectedlibrary') $daterange";
-else
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='RB' or pcode ='BX') AND (plibrary != 'WRLC Books (OUP)') $daterange";
-	$query = mysqli_query($conn, $sql);
-	while ($row = mysqli_fetch_array($query))
-	{ 
-	echo '<td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;">'.number_format($row['SUM(cccount)']);
-	
-	$boxesvalue= $row['SUM(cccount)']*2.65;
-///	echo '<br />($';	
-	///echo number_format($boxesvalue,2,".",",");
-	///echo ')';
-	///echo '</td>';
-	}
-
-/////Clamshells Total ///////
-if(isset($selectedlibrary) AND $selectedlibrary !='')
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='CB') AND (plibrary = '$selectedlibrary') $daterange";
-else
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='CB') AND (plibrary != 'WRLC Books (OUP)') $daterange";
-	$query = mysqli_query($conn, $sql);
-	while ($row = mysqli_fetch_array($query))
-	{ 
-	echo '<td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;">'.number_format($row['SUM(cccount)']);
-	
-	$clamshellsvalue= $row['SUM(cccount)']*1.50;
-	///echo '<br />($';	
-	///echo number_format($clamshellsvalue,2,".",",");
-	///echo ')';
-	echo '</td>';
-	}
-	
-/////Flat Boxes Total ///////
-if(isset($selectedlibrary) AND $selectedlibrary !='')
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='GB') AND (plibrary = '$selectedlibrary') $daterange";
-else
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='GB') AND (plibrary != 'WRLC Books (OUP)') $daterange";
-	$query = mysqli_query($conn, $sql);
-	while ($row = mysqli_fetch_array($query))
-	{ 
-	echo '<td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;">'.number_format($row['SUM(cccount)']);
-	
-	$flatboxesvalue= $row['SUM(cccount)']*2.65;
-	///echo '<br />($';	
-	///echo number_format($flatboxesvalue,2,".",",");
-	///echo ')';
-	echo '</td>';
-	}
-	
-/////Long Boxes Total ///////
-if(isset($selectedlibrary) AND $selectedlibrary !='')
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='LB') AND (plibrary = '$selectedlibrary') $daterange";
-else
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='LB') AND (plibrary != 'WRLC Books (OUP)') $daterange";
-	$query = mysqli_query($conn, $sql);
-	while ($row = mysqli_fetch_array($query))
-	{ 
-	echo '<td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;">'.number_format($row['SUM(cccount)']);
-	
-	$longboxesvalue= $row['SUM(cccount)']*2.65;
-	//echo '<br />($';	
-//	echo number_format($longboxesvalue,2,".",",");
-//	echo ')';
-	echo '</td>';
-	}
-	
-/////Shelf Rentals Total ///////
-if(isset($selectedlibrary) AND $selectedlibrary !='')
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='SR') AND (plibrary = '$selectedlibrary') $daterange";
-else
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='SR') AND (plibrary != 'WRLC Books (OUP)') $daterange";
-	$query = mysqli_query($conn, $sql);
-	while ($row = mysqli_fetch_array($query))
-	{ 
-	echo '<td class="green black-text black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;">'.number_format($row['SUM(cccount)']);
-	
-	$srvalue= $row['SUM(cccount)']*2.00;
-	//echo '<br />($';	
-//	echo number_format($srvalue,2,".",",");
-//	echo ')';
-	echo '</td>';
-	}
-
-
-
-
-
-    if(isset($selectedlibrary) AND $selectedlibrary !='')
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='WD') AND (plibrary = '$selectedlibrary') $daterange";
-else
-$sql = "SELECT SUM(cccount) FROM ProcessingAll WHERE (pcode ='WD') AND (plibrary != 'WRLC Books (OUP)') $daterange";
-	$query = mysqli_query($conn, $sql);
-	while ($row = mysqli_fetch_array($query))
-	{ 
-	echo '<td class="green black-text lighten-4 center" style="border-left:1px solid #eee; border-top:2px solid #ccc; border-bottom:2px solid #ccc;">'.number_format($row['SUM(cccount)']);
-	
-	$wdvalue= $row['SUM(cccount)']*1.70;
-///	echo '<br />($';	
-	///echo number_format($boxesvalue,2,".",",");
-	///echo ')';
-	 '</td>';
-	}
-
-
-
-//// End Totals
-echo '</tr>';
-
-echo '<tr><th class="green darken-1 white-text">Value:</th><th class="green darken-1 white-text center">$'.number_format($volumevalue,2,".",",").'</th><th class="green darken-1 white-text center">$'.number_format($oversizedvalue,2,".",",").'</th><th class="green darken-1 white-text center">$'.number_format($boxesvalue,2,".",",").'</th><th class="green darken-1 white-text center">$'.number_format($clamshellsvalue,2,".",",").'</th><th class="green darken-1 white-text center">$'.number_format($flatboxesvalue,2,".",",").'</th><th class="green darken-1 white-text center">$'.number_format($longboxesvalue,2,".",",").'</th><th class="green darken-1 white-text center">$'.number_format($srvalue,2,".",",").'</th><th class="green darken-1 white-text center">$'.number_format($wdvalue,2,".",",").'</th></tr>';
-
-
-
-
-echo '</table>';
-
-echo '<br /><br />';
-$total = ($volumevalue + $oversizedvalue + $boxesvalue + $clamshellsvalue + $flatboxesvalue + $longboxesvalue + $srvalue + $wdvalue);
-echo '<h4 class="center">Total: $'.number_format($total,2,".",",").'</h4>';
-
-//// Close DB connection ////    
-      echo '
-      </div>
-      </div>
-	 
-	  
-   
-</div></div>';
-
-
-
-
-echo '<!--JavaScript at end of body for optimized loading-->';
-include('footer.php'); ?>
-  <script type="text/javascript">
+<script>
 document.addEventListener('DOMContentLoaded', function() {
     var elems = document.querySelectorAll('.collapsible');
-    var instances = M.Collapsible.init(elems, options);
-  });
+    M.Collapsible.init(elems);
+});
 
-  // Or with jQuery
-
-  $(document).ready(function(){
+$(document).ready(function() {
     $('.collapsible').collapsible();
-  });
-  </script>
+    $('select').formSelect();
+});
+</script>
 </body>
 </html>
