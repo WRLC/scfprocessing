@@ -11,14 +11,14 @@ if (isset($_SESSION['user_id'])) {
             // Destroy the session and redirect to login
             session_unset();
             session_destroy();
-            header("Location: login.php");
+            header("Location: /login.php");
             exit();
         }
     }
     // Update last activity timestamp
     $_SESSION['last_activity'] = time();
 } else {
-    header("Location: login.php");
+    header("Location: /login.php");
     exit();
 }
 
