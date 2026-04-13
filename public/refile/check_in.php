@@ -1,74 +1,173 @@
+<?php include 'include/access.php'; ?>
 <?php
-include 'include/access.php';
-
-function almaRequest($url, $method = 'GET', $api_key = '', $body = null)
+function h($value)
 {
-    $ch = curl_init();
-
-    $headers = [
-        'Accept: application/xml',
-    ];
-
-    if (!empty($api_key)) {
-        $headers[] = 'Authorization: apikey ' . $api_key;
-    }
-
-    if ($method === 'POST' || $method === 'PUT') {
-        $headers[] = 'Content-Type: application/xml';
-    }
-
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_HEADER, false);
-
-    if ($method === 'POST') {
-        curl_setopt($ch, CURLOPT_POST, true);
-    } elseif ($method === 'PUT') {
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
-    }
-
-    if ($body !== null) {
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-    }
-
-    $response = curl_exec($ch);
-    $error = curl_error($ch);
-    $errno = curl_errno($ch);
-    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $final_url = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
-
-    curl_close($ch);
-
-    return [
-        'response' => $response,
-        'error' => $error,
-        'errno' => $errno,
-        'httpcode' => $httpcode,
-        'final_url' => $final_url,
-        'ok' => ($errno === 0 && $response !== false),
-    ];
+    return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
-function normalizeBarcode($barcode)
+function almaRequest($url, $method = 'GET', $body = null, $headers = array(), $timeout = 12, $connectTimeout = 5, $retries = 2, $retryDelayMs = 400)
 {
-    $barcode = trim($barcode);
+    $attempt = 0;
+    $lastError = '';
+    $lastStatus = 0;
+    $lastBody = '';
 
-    if (substr($barcode, -1) !== 'X') {
-        $barcode .= 'X';
+    while ($attempt <= $retries) {
+        $ch = curl_init();
+
+        if (!$ch) {
+            return array(
+                'ok' => false,
+                'status' => 0,
+                'body' => '',
+                'error' => 'Unable to initialize cURL.'
+            );
+        }
+
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $connectTimeout);
+        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+
+        if ($method === 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+            if ($body !== null) {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            }
+        } elseif ($method === 'PUT') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+            if ($body !== null) {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            }
+        }
+
+        if (!empty($headers)) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        }
+
+        $responseBody = curl_exec($ch);
+        $lastError = curl_error($ch);
+        $lastStatus = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $lastBody = ($responseBody !== false) ? $responseBody : '';
+
+        curl_close($ch);
+
+        if ($responseBody !== false && $lastStatus >= 200 && $lastStatus < 300) {
+            return array(
+                'ok' => true,
+                'status' => $lastStatus,
+                'body' => $responseBody,
+                'error' => ''
+            );
+        }
+
+        $shouldRetry = false;
+
+        if ($responseBody === false) {
+            $shouldRetry = true;
+        } elseif (in_array($lastStatus, array(408, 429, 500, 502, 503, 504), true)) {
+            $shouldRetry = true;
+        }
+
+        if (!$shouldRetry || $attempt === $retries) {
+            break;
+        }
+
+        usleep($retryDelayMs * 1000);
+        $retryDelayMs *= 2;
+        $attempt++;
     }
 
-    if (strtolower(substr($barcode, 0, 1)) === 'p' && strlen($barcode) === 6) {
-        $barcode .= 'X';
-    }
-
-    return $barcode;
+    return array(
+        'ok' => false,
+        'status' => $lastStatus,
+        'body' => $lastBody,
+        'error' => $lastError !== '' ? $lastError : 'Request failed.'
+    );
 }
-?><!DOCTYPE html>
+
+function loadXmlFromResponse($response)
+{
+    if (!is_array($response) || empty($response['ok']) || trim((string)$response['body']) === '') {
+        return false;
+    }
+
+    return @simplexml_load_string($response['body']);
+}
+
+function findItemXmlByBarcode($barcodeInput, $apiKey, $apiKeyHeader, $prefix)
+{
+    $barcodeInput = trim((string)$barcodeInput);
+
+    if ($barcodeInput === '') {
+        return array(
+            'ok' => false,
+            'url' => '',
+            'xml' => false,
+            'response' => null,
+            'error' => 'Blank barcode.'
+        );
+    }
+
+    $candidateBarcodes = array();
+
+    $barcodeWithX = $barcodeInput;
+    if (substr($barcodeWithX, -1) !== 'X') {
+        $barcodeWithX .= 'X';
+    }
+    $candidateBarcodes[] = $barcodeWithX;
+
+    if (strtolower(substr($barcodeInput, 0, 1)) === 'p' && strlen($barcodeInput) === 6) {
+        $candidateBarcodes[] = $barcodeInput . 'X';
+    }
+
+    $barcodeWithoutX = str_replace('X', '', $barcodeWithX);
+    if ($barcodeWithoutX !== '') {
+        $candidateBarcodes[] = $barcodeWithoutX;
+    }
+
+    $candidateBarcodes = array_values(array_unique($candidateBarcodes));
+
+    foreach ($candidateBarcodes as $candidateBarcode) {
+        $url = $prefix . 'items?item_barcode=' . rawurlencode($candidateBarcode) . '&apikey=' . rawurlencode($apiKey);
+
+        $response = almaRequest(
+            $url,
+            'GET',
+            null,
+            array($apiKeyHeader, 'Accept: application/xml'),
+            12,
+            5,
+            2,
+            400
+        );
+
+        $xml = loadXmlFromResponse($response);
+
+        if ($xml !== false && isset($xml->item_data->barcode)) {
+            return array(
+                'ok' => true,
+                'url' => $url,
+                'xml' => $xml,
+                'response' => $response,
+                'error' => ''
+            );
+        }
+    }
+
+    return array(
+        'ok' => false,
+        'url' => '',
+        'xml' => false,
+        'response' => null,
+        'error' => 'Item record does not exist.'
+    );
+}
+?>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -84,20 +183,17 @@ function normalizeBarcode($barcode)
     <div class="row">
         <div class="col-md-6 offset-md-3">
 
-            <h2 class="text-center">Step 1: Check-in Returns and place on Hold Shelf - <?php echo htmlspecialchars($name ?? ''); ?></h2>
+            <h2 class="text-center">Step 1: Check-in Returns and place on Hold Shelf - <?php echo h(isset($name) ? $name : ''); ?></h2>
 
             <div class="card-header bg-primary text-white">
                 <h4>Barcode Entry</h4>
             </div>
 
-            <?php
-            $itembarcode = isset($_GET['barcode']) ? htmlspecialchars(trim($_GET['barcode'])) : '';
-            ?>
-
             <form action="" method="POST" id="dateForm" class="border p-4 bg-light">
                 <div class="form-group">
                     <label for="barcode">Item Barcode:</label>
-                    <input type="text" class="form-control" id="barcode" name="barcode" value="<?php echo $itembarcode; ?>" required>
+                    <?php $itembarcode = isset($_GET['barcode']) ? trim((string)$_GET['barcode']) : ''; ?>
+                    <input type="text" class="form-control" id="barcode" name="barcode" value="<?php echo h($itembarcode); ?>" required>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block">Submit</button>
             </form>
@@ -111,115 +207,90 @@ function normalizeBarcode($barcode)
                 </div>
             </div>
 
-            <?php
-            if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST['barcode'])) {
-                $barcode = normalizeBarcode($_POST['barcode']);
+<?php
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
+    $barcode = trim((string)$_POST['barcode']);
 
-                $library = 'SCF';
-                $circ_desk = 'DEFAULT_CIRC_DESK';
-                $prefix = 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/';
+    if (substr($barcode, -1) !== 'X') {
+        $barcode .= 'X';
+    }
 
-                include 'include/apikey.php';
+    if (strtolower(substr($barcode, 0, 1)) === 'p' && strlen($barcode) === 6) {
+        $barcode .= 'X';
+    }
 
-                if (!isset($api_key) || $api_key === '') {
-                    echo "<div class='alert alert-danger mt-3 text-center'>API key is not configured.</div>";
-                    exit;
-                }
+    $library = 'SCF';
+    $circ_desk = 'DEFAULT_CIRC_DESK';
+    $prefix = 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/';
 
-                $candidateBarcodes = [$barcode];
-                $barcodeWithoutX = str_replace('X', '', $barcode);
+    include 'include/apikey.php';
 
-                if ($barcodeWithoutX !== $barcode) {
-                    $candidateBarcodes[] = $barcodeWithoutX;
-                }
+    $itemLookup = findItemXmlByBarcode($barcode, $api_key, $api_key_header, $prefix);
 
-                $itemLookup = null;
-                $resolvedBarcode = null;
+    if (!$itemLookup['ok'] || $itemLookup['xml'] === false) {
+        echo "<div class='alert alert-danger mt-3 text-center'>Item record does not exist</div>";
+    } else {
+        $item_url = $itemLookup['url'];
+        $httpcode = (int)$itemLookup['response']['status'];
+        $xml = $itemLookup['xml'];
 
-                foreach ($candidateBarcodes as $candidate) {
-                    $item_by_barc_url = $prefix . 'items?item_barcode=' . urlencode($candidate) . '&apikey=' . urlencode($api_key);
-                    $result = almaRequest($item_by_barc_url, 'GET', $api_key);
+        $title = isset($xml->bib_data->title) ? (string)$xml->bib_data->title : '';
+        $internalNote3 = isset($xml->item_data->internal_note_3) ? (string)$xml->item_data->internal_note_3 : '';
+        $internalNote1 = isset($xml->item_data->internal_note_1) ? (string)$xml->item_data->internal_note_1 : '';
+        $acn = isset($xml->item_data->alternative_call_number) ? (string)$xml->item_data->alternative_call_number : '';
+        $holding_id = isset($xml->holding_data->holding_id) ? (string)$xml->holding_data->holding_id : '';
+        $pid = isset($xml->item_data->pid) ? (string)$xml->item_data->pid : '';
+        $mms_id = isset($xml->bib_data->mms_id) ? (string)$xml->bib_data->mms_id : '';
+        $process_type = isset($xml->item_data->process_type) ? (string)$xml->item_data->process_type : '';
 
-                    if ($result['ok'] && $result['httpcode'] === 200 && !empty($result['response'])) {
-                        $itemLookup = $result;
-                        $resolvedBarcode = $candidate;
-                        break;
-                    }
-                }
+        if (!empty($internalNote3) && $internalNote3 !== 'SCF Hold Shelf') {
+            echo "<br><div class='alert alert-danger text-center'>
+                <h4 class='mb-3'>Barcode " . h($barcode) . "</h4>
+                Internal note 3 message: " . h($internalNote3) . "<br><br>
+                <span class='font-italic'>This item has not been checked in. Please give it to your supervisor.</span>
+            </div>";
+        } else {
+            $loan_url = $prefix . 'bibs/' . rawurlencode($mms_id) . '/holdings/' . rawurlencode($holding_id) . '/items/' . rawurlencode($pid) . '/loans?apikey=' . rawurlencode($api_key);
 
-                if ($itemLookup === null) {
-                    echo "<div class='alert alert-danger mt-3 text-center'>Item record does not exist or Alma lookup timed out.</div>";
-                    exit;
-                }
+            $loanResponse = almaRequest(
+                $loan_url,
+                'GET',
+                null,
+                array($api_key_header, 'Accept: application/xml'),
+                15,
+                5,
+                3,
+                700
+            );
 
-                $barcode = $resolvedBarcode;
-                $response = $itemLookup['response'];
-                $httpcode = $itemLookup['httpcode'];
+            $loan_xml = loadXmlFromResponse($loanResponse);
+            $total_record_count = 0;
+            $due_date = '';
+            $loan_status = '';
+            $process_status = '';
+            $user_id = '';
+            $alreadyCheckedIn = false;
+            $scanSucceeded = false;
+            $status = "Item Not In Place";
 
-                $xml = simplexml_load_string($response);
+            if ($loan_xml === false) {
+                echo "<div class='alert alert-danger mt-3'>Loan lookup failed: " . h($loanResponse['error']) . "</div>";
+            } else {
+                $total_record_count = isset($loan_xml['total_record_count']) ? (int)$loan_xml['total_record_count'] : 0;
 
-                if ($xml === false) {
-                    echo "<div class='alert alert-danger mt-3 text-center'>Failed to parse item XML response.</div>";
-                    exit;
-                }
-
-                $internalNote3 = (string)($xml->item_data->internal_note_3 ?? '');
-                $internalNote1 = (string)($xml->item_data->internal_note_1 ?? '');
-                $acn = (string)($xml->item_data->alternative_call_number ?? '');
-                $holding_id = (string)($xml->holding_data->holding_id ?? '');
-                $pid = (string)($xml->item_data->pid ?? '');
-                $mms_id = (string)($xml->bib_data->mms_id ?? '');
-                $title = (string)($xml->bib_data->title ?? '');
-                $process_type = (string)($xml->item_data->process_type ?? '');
-
-                $item_api_url = "https://api-na.hosted.exlibrisgroup.com/almaws/v1/bibs/" . rawurlencode($mms_id)
-                    . "/holdings/" . rawurlencode($holding_id)
-                    . "/items/" . rawurlencode($pid)
-                    . "?apikey=" . urlencode($api_key);
-
-                if (!empty($internalNote3) && $internalNote3 !== 'SCF Hold Shelf') {
-                    echo "<br /><div class='alert alert-danger text-center'>
-                        <h4 class='mb-3'>Barcode " . htmlspecialchars($barcode) . "</h4>
-                        Internal note 3 message: " . htmlspecialchars($internalNote3) . "<br /><br />
-                        <span class='font-italic'>This item has not been checked in. Please give it to your supervisor.</span>
-                    </div>";
-                    exit;
-                }
-
-                $loan_url = "https://api-na.hosted.exlibrisgroup.com/almaws/v1/bibs/" . rawurlencode($mms_id) . "/holdings/" . rawurlencode($holding_id) . "/items/" . rawurlencode($pid) . "/loans?apikey=" . urlencode($api_key);
-
-                $loanResult = almaRequest($loan_url, 'GET', $api_key);
-
-                if (!$loanResult['ok']) {
-                    echo "<div class='alert alert-danger mt-3'>Loan lookup failed: " . htmlspecialchars($loanResult['error']) . "</div>";
-                    exit;
-                }
-
-                if ($loanResult['httpcode'] !== 200) {
-                    echo "<div class='alert alert-danger mt-3'>Loan lookup returned HTTP " . (int)$loanResult['httpcode'] . ".</div>";
-                    exit;
-                }
-
-                $loan_xml = simplexml_load_string($loanResult['response']);
-
-                if ($loan_xml === false) {
-                    echo "<div class='alert alert-danger mt-3'>Failed to parse loan XML response.</div>";
-                    exit;
-                }
-
-                $total_record_count = (int)($loan_xml['total_record_count'] ?? 0);
-                $alreadyCheckedIn = ($total_record_count === 0);
-                $status = $alreadyCheckedIn ? 'Already Checked In' : 'Item In Place';
-
-                if ($alreadyCheckedIn) {
+                if ($total_record_count === 0) {
+                    $alreadyCheckedIn = true;
                     echo '<div class="alert alert-danger text-center mt-3"><strong><h3>Item Already Checked In.</h3><p>Please give it to your supervisor for review.</p></strong></div>';
                 } else {
-                    $item_loan = $loan_xml->item_loan;
+                    $item_loan = isset($loan_xml->item_loan) ? $loan_xml->item_loan : null;
 
                     if ($item_loan) {
-                        $user_id = (string)($item_loan->user_id ?? '');
+                        $due_date = isset($item_loan->due_date) ? (string)$item_loan->due_date : '';
+                        $loan_status = isset($item_loan->loan_status) ? (string)$item_loan->loan_status : '';
+                        $process_status = isset($item_loan->process_status) ? (string)$item_loan->process_status : '';
+                        $user_id = isset($item_loan->user_id) ? (string)$item_loan->user_id : '';
 
-                        $deliverToMapping = [
+                        $deliverToMapping = array(
                             "01WRLC_AMU-UNIV_LIB" => "AU",
                             "01WRLC_AMULAW-PLL" => "AULAW",
                             "01WRLC_CAA-CUMULLEN" => "CU",
@@ -257,14 +328,14 @@ function normalizeBarcode($barcode)
                             "01WRLC_GWALAW-GWALAW" => "JB",
                             "01WRLC_MAR-main" => "MU",
                             "01WRLC_MAR-bcle" => "MUB",
-                            "01WRLC_SCF-Sheehan Library" => "TR",
-                        ];
+                            "01WRLC_SCF-Sheehan Library" => "TR"
+                        );
 
                         if (isset($deliverToMapping[$user_id])) {
-                            echo "<div class='alert alert-warning text-center mt-3' style='color:#000;'><strong>Patron: Deliver To: " . htmlspecialchars($deliverToMapping[$user_id]) . "</strong></div>";
+                            echo "<div class='alert alert-warning text-center mt-3' style='color:#000;'><strong>Patron: Deliver To: " . h($deliverToMapping[$user_id]) . "</strong></div>";
                         } else {
                             if ($user_id !== '') {
-                                echo "<div class='alert alert-warning text-center mt-3' style='color:#000;'><strong>Patron: " . htmlspecialchars($user_id) . ".</strong></div>";
+                                echo "<div class='alert alert-warning text-center mt-3' style='color:#000;'><strong>Patron: " . h($user_id) . ".</strong></div>";
                             } else {
                                 echo '<div class="alert alert-danger text-center font-italics mt-3" style="color:#000;"><strong>Patron field is blank. Set Item aside for Supervisor.</strong></div>';
                             }
@@ -274,179 +345,206 @@ function normalizeBarcode($barcode)
 
                 if ($httpcode !== 200) {
                     echo "<p class='alert alert-danger'>Barcode error. Please check with Supervisor.</p>";
-                    exit;
-                }
+                } else {
+                    if (!$alreadyCheckedIn) {
+                        $scan_in_url = $item_url
+                            . '&op=scan'
+                            . '&library=' . urlencode($library)
+                            . '&circ_desk=' . urlencode($circ_desk);
 
-                if (!$alreadyCheckedIn) {
-                    $scan_in_url = $item_api_url . '&op=scan&library=' . urlencode($library) . '&circ_desk=' . urlencode($circ_desk);
+                        $scanResponse = almaRequest(
+                            $scan_in_url,
+                            'POST',
+                            '',
+                            array(
+                                'Content-Type: application/xml',
+                                'Authorization: apikey ' . $api_key,
+                                'Accept: application/xml'
+                            ),
+                            15,
+                            5,
+                            2,
+                            500
+                        );
 
-                    $scanResult = almaRequest($scan_in_url, 'POST', $api_key, '');
+                        $post_response = $scanResponse['body'];
+                        $post_httpcode = (int)$scanResponse['status'];
 
-                    if (!$scanResult['ok']) {
-                        echo "<div class='alert alert-danger mt-3'>Scan-in failed: " . htmlspecialchars($scanResult['error']) . "</div>";
-                        exit;
-                    }
-
-                    $post_response = $scanResult['response'];
-                    $post_httpcode = $scanResult['httpcode'];
-
-                    if ($post_httpcode !== 200) {
-                        echo "<div class='alert alert-info'><h5>Scan-in API Response:</h5>";
-                        echo "<pre>HTTP Status Code: " . htmlspecialchars((string)$post_httpcode) . "</pre>";
-                        echo "<pre>" . htmlspecialchars((string)$post_response) . "</pre>";
-                        echo "</div>";
-                        exit;
+                        if ($post_httpcode === 200) {
+                            echo '<div class="alert alert-primary text-center"><h4>Barcode ' . h($barcode) . ' has been checked in.</h4>';
+                            $status = "Item In Place";
+                            $scanSucceeded = true;
+                        } else {
+                            $status = "Item Not In Place";
+                            echo "<div class='alert alert-info'><h5>Scan-in API Response:</h5>";
+                            echo "<pre>HTTP Status Code: " . h($post_httpcode) . "</pre>";
+                            echo "<pre>" . h($post_response) . "</pre>";
+                        }
                     }
 
                     if (empty($internalNote1) && empty($acn)) {
-                        echo '<div class="alert alert-primary text-center"><h4>Barcode ' . htmlspecialchars($barcode) . ' has been checked in.</h4></div>';
-                        echo "<br /><div class='alert alert-warning text-center'>
-                            <h4 class='mb-3'>Barcode " . htmlspecialchars($barcode) . "</h4>
+                        echo "<br><div class='alert alert-warning text-center'>
+                            <h4 class='mb-3'>Barcode " . h($barcode) . "</h4>
                             <h5>Possible New Book - Additional Processing Needed.</h5>
                             <span class='font-italic'>This item has been checked in but do not place on hold shelf.</span>
                         </div>";
-                        exit;
-                    }
+                    } else {
+                        $getItemResponse = almaRequest(
+                            $item_url,
+                            'GET',
+                            null,
+                            array($api_key_header, 'Accept: application/xml'),
+                            12,
+                            5,
+                            2,
+                            400
+                        );
 
-                    $reloadResult = null;
+                        $itemXml = loadXmlFromResponse($getItemResponse);
 
-                    for ($i = 0; $i < 3; $i++) {
-                        $reloadResult = almaRequest($item_api_url, 'GET', $api_key);
+                        if ($itemXml === false) {
+                            echo '<p>Exception found: Return Item to Supervisor</p>';
+                        } else {
+                            $displayTitle = isset($itemXml->bib_data->title) ? (string)$itemXml->bib_data->title : $title;
+                            $displayInternalNote1 = isset($itemXml->item_data->internal_note_1) ? (string)$itemXml->item_data->internal_note_1 : $internalNote1;
+                            $displayMmsId = isset($itemXml->bib_data->mms_id) ? (string)$itemXml->bib_data->mms_id : $mms_id;
+                            $displayProcessType = isset($itemXml->item_data->process_type) ? (string)$itemXml->item_data->process_type : $process_type;
 
-                        if ($reloadResult['ok'] && $reloadResult['httpcode'] === 200 && !empty($reloadResult['response'])) {
-                            break;
+                            if (!$alreadyCheckedIn && $scanSucceeded) {
+                                $itemXml->item_data->internal_note_3 = 'SCF Hold Shelf';
+                                $itemXml->holding_data->in_temp_location = 'true';
+                                $itemXml->holding_data->temp_library = 'SCF';
+                                $itemXml->holding_data->temp_location = 'SCF_Hold';
+
+                                $modified_xml = $itemXml->asXML();
+
+                                $putResponse = almaRequest(
+                                    $item_url,
+                                    'PUT',
+                                    $modified_xml,
+                                    array(
+                                        'Content-Type: application/xml',
+                                        'Authorization: apikey ' . $api_key,
+                                        'Accept: application/xml'
+                                    ),
+                                    15,
+                                    5,
+                                    2,
+                                    500
+                                );
+
+                                if (!$putResponse['ok']) {
+                                    echo '<p>Exception found: Return Item to Supervisor</p><p>' . h($putResponse['body']) . '</p>';
+                                }
+                            }
+
+                            echo '<div class="alert alert-primary text-center">';
+
+                            if ($alreadyCheckedIn) {
+                                echo '<h4>Barcode ' . h($barcode) . ' was already checked in.</h4>';
+                            } elseif ($scanSucceeded) {
+                                echo '<h4>Barcode ' . h($barcode) . ' has been checked in.</h4>';
+                            }
+
+                            echo '<h4>' . h($displayTitle) . '</h4>';
+
+                            $formatted_note = preg_replace_callback(
+                                '/(R\d{2})|(M\d{2})|(S\d{2})|(T\d{2})/',
+                                function ($matches) {
+                                    if (!empty($matches[1])) {
+                                        return '<span class="text-primary">' . $matches[1] . '</span>';
+                                    } elseif (!empty($matches[2])) {
+                                        return '<span class="text-success">' . $matches[2] . '</span>';
+                                    } elseif (!empty($matches[3])) {
+                                        return '<span class="text-danger">' . $matches[3] . '</span>';
+                                    } elseif (!empty($matches[4])) {
+                                        return '<span class="text-info">' . $matches[4] . '</span>';
+                                    }
+                                    return '';
+                                },
+                                $displayInternalNote1
+                            );
+
+                            echo '<h4 class="badge text-center badge-light" style="font-size:1.4em;">Tray Barcode: ' . $formatted_note . '</h4>';
+                            echo '<p><i>Be sure to write down and include the tray barcode with the item.</i></p>';
+
+                            if ($displayProcessType !== '') {
+                                echo "<div class='alert alert-warning'>This item has a processing type of '" . h($displayProcessType) . "'.</div>";
+                            }
+
+                            if ($alreadyCheckedIn) {
+                                echo "<div class='alert alert-warning'><strong>Item was already checked in. Review before placing on Hold Shelf.</strong></div>";
+                            } else {
+                                echo "<div class='alert alert-success'><strong>Item is ready to be placed on Hold Shelf</strong></div>";
+                            }
+
+                            echo "<br><br>";
+                            echo '<a class="btn btn-primary mr-1" target="_blank" href="https://api-na.hosted.exlibrisgroup.com/almaws/v1/bibs/' . rawurlencode($displayMmsId) . '/loans?apikey=' . rawurlencode($api_key) . '">View Check-In XML</a>';
+                            echo '<a href="' . h($item_url) . '" class="btn btn-primary" target="_blank">View Record XML</a>';
+                            echo '<br><br><center><a class="btn btn-danger text-center" href="">Clear Form</a></center>';
+                            echo '</div>';
+
+                            if (!$alreadyCheckedIn && $scanSucceeded) {
+                                $file = __DIR__ . '/refile.ndjson';
+
+                                if ($displayProcessType !== '') {
+                                    $process_type_full = $status . ' - ' . $displayProcessType;
+                                } else {
+                                    $process_type_full = $status;
+                                }
+
+                                $jsonDate = date('Y-m-d H:i:s');
+                                $jsonName = isset($name) ? $name : '';
+                                $jsonBarcode = $barcode;
+                                $jsonTrayBarcode = $displayInternalNote1;
+                                $jsonStatus = $process_type_full;
+                                $jsonStep = '1';
+
+                                $newEntry = array(
+                                    'date' => $jsonDate,
+                                    'name' => $jsonName,
+                                    'barcode' => $jsonBarcode,
+                                    'tray barcode' => $jsonTrayBarcode,
+                                    'status' => $jsonStatus,
+                                    'step' => $jsonStep
+                                );
+
+                                $jsonLine = json_encode($newEntry, JSON_UNESCAPED_SLASHES);
+                                if ($jsonLine === false) {
+                                    die('Error: JSON encoding failed. ' . json_last_error_msg());
+                                }
+
+                                if (file_put_contents($file, $jsonLine . "\n", FILE_APPEND | LOCK_EX) === false) {
+                                    die('Error: Unable to write to the JSON file.');
+                                }
+                            }
                         }
-
-                        usleep(500000);
                     }
 
-                    if (!$reloadResult['ok'] || $reloadResult['httpcode'] !== 200) {
-                        echo "<div class='alert alert-danger mt-3'>Failed to reload item record for update.</div>";
-                        echo "<pre>HTTP Status Code: " . htmlspecialchars((string)$reloadResult['httpcode']) . "</pre>";
-                        echo "<pre>cURL Error: " . htmlspecialchars((string)$reloadResult['error']) . "</pre>";
-                        exit;
-                    }
-
-                    $xml = simplexml_load_string($reloadResult['response']);
-
-                    if ($xml === false) {
-                        echo "<div class='alert alert-danger mt-3'>Failed to parse item record for update.</div>";
-                        exit;
-                    }
-
-                    $title = (string)($xml->bib_data->title ?? '');
-                    $internal_note_1 = (string)($xml->item_data->internal_note_1 ?? '');
-                    $process_type = (string)($xml->item_data->process_type ?? '');
-
-                    $xml->item_data->internal_note_3 = 'SCF Hold Shelf';
-                    $xml->holding_data->in_temp_location = 'true';
-                    $xml->holding_data->temp_library = 'SCF';
-                    $xml->holding_data->temp_location = 'SCF_Hold';
-
-                    $modified_xml = $xml->asXML();
-
-                    $putResult = almaRequest($item_api_url, 'PUT', $api_key, $modified_xml);
-
-                    if (!$putResult['ok'] || $putResult['httpcode'] >= 400) {
-                        echo '<p>Exception found: Return Item to Supervisor</p>';
-                        echo '<pre>' . htmlspecialchars($putResult['response'] ?: $putResult['error']) . '</pre>';
-                        echo '<br /><center><a class="btn btn-danger text-center" href="">Clear Form</a></center>';
-                        exit;
-                    }
-
-                    echo '<div class="alert alert-primary text-center"><h4>Barcode ' . htmlspecialchars($barcode) . ' has been checked in.</h4>';
-                } else {
-                    echo '<div class="alert alert-primary text-center"><h4>Barcode ' . htmlspecialchars($barcode) . ' has been checked in.</h4>';
+                    echo '</div>';
                 }
-
-                echo '<h4>' . htmlspecialchars($title) . '</h4>';
-
-                $displayTrayBarcode = $alreadyCheckedIn ? $internalNote1 : $internal_note_1;
-
-                $formatted_note = preg_replace_callback(
-                    '/(R\d{2})|(M\d{2})|(S\d{2})|(T\d{2})/',
-                    function ($matches) {
-                        if (!empty($matches[1])) {
-                            return '<span class="text-primary">' . htmlspecialchars($matches[1]) . '</span>';
-                        } elseif (!empty($matches[2])) {
-                            return '<span class="text-success">' . htmlspecialchars($matches[2]) . '</span>';
-                        } elseif (!empty($matches[3])) {
-                            return '<span class="text-danger">' . htmlspecialchars($matches[3]) . '</span>';
-                        } elseif (!empty($matches[4])) {
-                            return '<span class="text-info">' . htmlspecialchars($matches[4]) . '</span>';
-                        }
-                        return '';
-                    },
-                    $displayTrayBarcode
-                );
-
-                echo '<h4 class="badge text-center badge-light" style="font-size:1.4em;">Tray Barcode: ' . $formatted_note . '</h4>';
-                echo '<p><i>Be sure to write down and include the tray barcode with the item.</i></p>';
-
-                if ($process_type !== '') {
-                    echo "<div class='alert alert-warning'>This item has a processing type of '" . htmlspecialchars($process_type) . "'.</div><div>";
-                }
-
-                echo "<div class='alert alert-success'><strong>Item is ready to be placed on Hold Shelf</strong></div><br /><br />";
-                echo "<div>";
-                echo '<a class="btn btn-primary mr-1" target="_blank" href="https://api-na.hosted.exlibrisgroup.com/almaws/v1/bibs/' . rawurlencode($mms_id) . '/loans?apikey=' . urlencode($api_key) . '">View Check-In XML</a> ';
-                echo '<a href="' . htmlspecialchars($item_api_url) . '" class="btn btn-primary" target="_blank">View Record XML</a></div>';
-
-                $file = __DIR__ . '/refile.ndjson';
-
-                if ($process_type !== '') {
-                    $process_type_full = $status . ' - ' . $process_type;
-                } else {
-                    $process_type_full = $status;
-                }
-
-                if (!$alreadyCheckedIn) {
-                    $jsonDate = date('Y-m-d H:i:s');
-                    $jsonName = $name ?? '';
-                    $jsonBarcode = $barcode;
-                    $jsonTrayBarcode = $displayTrayBarcode;
-                    $jsonStatus = $process_type_full;
-                    $jsonStep = '1';
-
-                    $newEntry = [
-                        'date' => $jsonDate,
-                        'name' => $jsonName,
-                        'barcode' => $jsonBarcode,
-                        'tray barcode' => $jsonTrayBarcode,
-                        'status' => $jsonStatus,
-                        'step' => $jsonStep,
-                    ];
-
-                    $jsonLine = json_encode($newEntry, JSON_UNESCAPED_SLASHES);
-                    if ($jsonLine === false) {
-                        die('Error: JSON encoding failed. ' . json_last_error_msg());
-                    }
-
-                    if (file_put_contents($file, $jsonLine . "\n", FILE_APPEND | LOCK_EX) === false) {
-                        die('Error: Unable to write to the JSON file.');
-                    }
-                }
-
-                echo '<br /><center><a class="btn btn-danger text-center" href="">Clear Form</a></center>';
-                echo '</div>';
-            } else {
-                if ($_SERVER["REQUEST_METHOD"] === "POST") {
-                    echo "<p>No barcode submitted.</p>";
-                }
-                echo '</div>';
             }
-            ?>
-
+        }
+    }
+} else {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        echo "<p>No barcode submitted.</p>";
+    }
+    echo '</div>';
+}
+?>
         </div>
     </div>
 </div>
 
 <?php include 'include/footer.php'; ?>
-
 <script>
-document.getElementById('dateForm').onsubmit = function() {
-    document.getElementById('loadingSpinner').style.display = 'block';
-};
+var dateForm = document.getElementById('dateForm');
+if (dateForm) {
+    dateForm.onsubmit = function() {
+        document.getElementById('loadingSpinner').style.display = 'block';
+    };
+}
 </script>
 </body>
 </html>
