@@ -45,7 +45,15 @@ function almaRequest($url, $method = 'GET', $body = null, $headers = array(), $t
         }
 
         if (!empty($headers)) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            $cleanHeaders = array();
+            foreach ($headers as $header) {
+                if (is_string($header) && $header !== '') {
+                    $cleanHeaders[] = $header;
+                }
+            }
+            if (!empty($cleanHeaders)) {
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $cleanHeaders);
+            }
         }
 
         $responseBody = curl_exec($ch);
@@ -91,21 +99,21 @@ function almaRequest($url, $method = 'GET', $body = null, $headers = array(), $t
 
 function loadXmlFromResponse($response)
 {
-    if (!is_array($response) || empty($response['ok']) || trim((string)$response['body']) === '') {
+    if (!is_array($response) || empty($response['ok']) || trim((string) $response['body']) === '') {
         return false;
     }
 
     return @simplexml_load_string($response['body']);
 }
 
-function findItemXmlByBarcode($barcodeInput, $apiKey, $apiKeyHeader, $prefix)
+function findItemXmlByBarcode($barcodeInput, $apiKey, $prefix)
 {
-    $barcodeInput = trim((string)$barcodeInput);
+    $barcodeInput = trim((string) $barcodeInput);
 
     if ($barcodeInput === '') {
         return array(
             'ok' => false,
-            'url' => '',
+            'lookup_url' => '',
             'xml' => false,
             'response' => null,
             'error' => 'Blank barcode.'
@@ -132,13 +140,13 @@ function findItemXmlByBarcode($barcodeInput, $apiKey, $apiKeyHeader, $prefix)
     $candidateBarcodes = array_values(array_unique($candidateBarcodes));
 
     foreach ($candidateBarcodes as $candidateBarcode) {
-        $url = $prefix . 'items?item_barcode=' . rawurlencode($candidateBarcode) . '&apikey=' . rawurlencode($apiKey);
+        $lookupUrl = $prefix . 'items?item_barcode=' . rawurlencode($candidateBarcode) . '&apikey=' . rawurlencode($apiKey);
 
         $response = almaRequest(
-            $url,
+            $lookupUrl,
             'GET',
             null,
-            array($apiKeyHeader, 'Accept: application/xml'),
+            array('Accept: application/xml'),
             12,
             5,
             2,
@@ -150,7 +158,7 @@ function findItemXmlByBarcode($barcodeInput, $apiKey, $apiKeyHeader, $prefix)
         if ($xml !== false && isset($xml->item_data->barcode)) {
             return array(
                 'ok' => true,
-                'url' => $url,
+                'lookup_url' => $lookupUrl,
                 'xml' => $xml,
                 'response' => $response,
                 'error' => ''
@@ -160,11 +168,20 @@ function findItemXmlByBarcode($barcodeInput, $apiKey, $apiKeyHeader, $prefix)
 
     return array(
         'ok' => false,
-        'url' => '',
+        'lookup_url' => '',
         'xml' => false,
         'response' => null,
         'error' => 'Item record does not exist.'
     );
+}
+
+function buildItemResourceUrl($prefix, $mmsId, $holdingId, $pid, $apiKey)
+{
+    return $prefix
+        . 'bibs/' . rawurlencode($mmsId)
+        . '/holdings/' . rawurlencode($holdingId)
+        . '/items/' . rawurlencode($pid)
+        . '?apikey=' . rawurlencode($apiKey);
 }
 ?>
 <!DOCTYPE html>
@@ -192,7 +209,7 @@ function findItemXmlByBarcode($barcodeInput, $apiKey, $apiKeyHeader, $prefix)
             <form action="" method="POST" id="dateForm" class="border p-4 bg-light">
                 <div class="form-group">
                     <label for="barcode">Item Barcode:</label>
-                    <?php $itembarcode = isset($_GET['barcode']) ? trim((string)$_GET['barcode']) : ''; ?>
+                    <?php $itembarcode = isset($_GET['barcode']) ? trim((string) $_GET['barcode']) : ''; ?>
                     <input type="text" class="form-control" id="barcode" name="barcode" value="<?php echo h($itembarcode); ?>" required>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block">Submit</button>
@@ -209,7 +226,7 @@ function findItemXmlByBarcode($barcodeInput, $apiKey, $apiKeyHeader, $prefix)
 
 <?php
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
-    $barcode = trim((string)$_POST['barcode']);
+    $barcode = trim((string) $_POST['barcode']);
 
     if (substr($barcode, -1) !== 'X') {
         $barcode .= 'X';
@@ -225,23 +242,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
 
     include 'include/apikey.php';
 
-    $itemLookup = findItemXmlByBarcode($barcode, $api_key, $api_key_header, $prefix);
+    $itemLookup = findItemXmlByBarcode($barcode, $api_key, $prefix);
 
     if (!$itemLookup['ok'] || $itemLookup['xml'] === false) {
         echo "<div class='alert alert-danger mt-3 text-center'>Item record does not exist</div>";
     } else {
-        $item_url = $itemLookup['url'];
-        $httpcode = (int)$itemLookup['response']['status'];
+        $lookup_url = $itemLookup['lookup_url'];
+        $httpcode = (int) $itemLookup['response']['status'];
         $xml = $itemLookup['xml'];
 
-        $title = isset($xml->bib_data->title) ? (string)$xml->bib_data->title : '';
-        $internalNote3 = isset($xml->item_data->internal_note_3) ? (string)$xml->item_data->internal_note_3 : '';
-        $internalNote1 = isset($xml->item_data->internal_note_1) ? (string)$xml->item_data->internal_note_1 : '';
-        $acn = isset($xml->item_data->alternative_call_number) ? (string)$xml->item_data->alternative_call_number : '';
-        $holding_id = isset($xml->holding_data->holding_id) ? (string)$xml->holding_data->holding_id : '';
-        $pid = isset($xml->item_data->pid) ? (string)$xml->item_data->pid : '';
-        $mms_id = isset($xml->bib_data->mms_id) ? (string)$xml->bib_data->mms_id : '';
-        $process_type = isset($xml->item_data->process_type) ? (string)$xml->item_data->process_type : '';
+        $title = isset($xml->bib_data->title) ? (string) $xml->bib_data->title : '';
+        $internalNote3 = isset($xml->item_data->internal_note_3) ? (string) $xml->item_data->internal_note_3 : '';
+        $internalNote1 = isset($xml->item_data->internal_note_1) ? (string) $xml->item_data->internal_note_1 : '';
+        $acn = isset($xml->item_data->alternative_call_number) ? (string) $xml->item_data->alternative_call_number : '';
+        $holding_id = isset($xml->holding_data->holding_id) ? (string) $xml->holding_data->holding_id : '';
+        $pid = isset($xml->item_data->pid) ? (string) $xml->item_data->pid : '';
+        $mms_id = isset($xml->bib_data->mms_id) ? (string) $xml->bib_data->mms_id : '';
+        $process_type = isset($xml->item_data->process_type) ? (string) $xml->item_data->process_type : '';
+        $item_url = buildItemResourceUrl($prefix, $mms_id, $holding_id, $pid, $api_key);
 
         if (!empty($internalNote3) && $internalNote3 !== 'SCF Hold Shelf') {
             echo "<br><div class='alert alert-danger text-center'>
@@ -256,7 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
                 $loan_url,
                 'GET',
                 null,
-                array($api_key_header, 'Accept: application/xml'),
+                array('Accept: application/xml'),
                 15,
                 5,
                 3,
@@ -266,7 +284,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
             $loan_xml = loadXmlFromResponse($loanResponse);
             $total_record_count = 0;
             $due_date = '';
-            $loan_status = '';
             $process_status = '';
             $user_id = '';
             $alreadyCheckedIn = false;
@@ -276,7 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
             if ($loan_xml === false) {
                 echo "<div class='alert alert-danger mt-3'>Loan lookup failed: " . h($loanResponse['error']) . "</div>";
             } else {
-                $total_record_count = isset($loan_xml['total_record_count']) ? (int)$loan_xml['total_record_count'] : 0;
+                $total_record_count = isset($loan_xml['total_record_count']) ? (int) $loan_xml['total_record_count'] : 0;
 
                 if ($total_record_count === 0) {
                     $alreadyCheckedIn = true;
@@ -285,10 +302,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
                     $item_loan = isset($loan_xml->item_loan) ? $loan_xml->item_loan : null;
 
                     if ($item_loan) {
-                        $due_date = isset($item_loan->due_date) ? (string)$item_loan->due_date : '';
-                        $loan_status = isset($item_loan->loan_status) ? (string)$item_loan->loan_status : '';
-                        $process_status = isset($item_loan->process_status) ? (string)$item_loan->process_status : '';
-                        $user_id = isset($item_loan->user_id) ? (string)$item_loan->user_id : '';
+                        $due_date = isset($item_loan->due_date) ? (string) $item_loan->due_date : '';
+                        $process_status = isset($item_loan->process_status) ? (string) $item_loan->process_status : '';
+                        $user_id = isset($item_loan->user_id) ? (string) $item_loan->user_id : '';
 
                         $deliverToMapping = array(
                             "01WRLC_AMU-UNIV_LIB" => "AU",
@@ -368,7 +384,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
                         );
 
                         $post_response = $scanResponse['body'];
-                        $post_httpcode = (int)$scanResponse['status'];
+                        $post_httpcode = (int) $scanResponse['status'];
 
                         if ($post_httpcode === 200) {
                             echo '<div class="alert alert-primary text-center"><h4>Barcode ' . h($barcode) . ' has been checked in.</h4>';
@@ -393,7 +409,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
                             $item_url,
                             'GET',
                             null,
-                            array($api_key_header, 'Accept: application/xml'),
+                            array('Accept: application/xml'),
                             12,
                             5,
                             2,
@@ -405,10 +421,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
                         if ($itemXml === false) {
                             echo '<p>Exception found: Return Item to Supervisor</p>';
                         } else {
-                            $displayTitle = isset($itemXml->bib_data->title) ? (string)$itemXml->bib_data->title : $title;
-                            $displayInternalNote1 = isset($itemXml->item_data->internal_note_1) ? (string)$itemXml->item_data->internal_note_1 : $internalNote1;
-                            $displayMmsId = isset($itemXml->bib_data->mms_id) ? (string)$itemXml->bib_data->mms_id : $mms_id;
-                            $displayProcessType = isset($itemXml->item_data->process_type) ? (string)$itemXml->item_data->process_type : $process_type;
+                            $displayTitle = isset($itemXml->bib_data->title) ? (string) $itemXml->bib_data->title : $title;
+                            $displayInternalNote1 = isset($itemXml->item_data->internal_note_1) ? (string) $itemXml->item_data->internal_note_1 : $internalNote1;
+                            $displayMmsId = isset($itemXml->bib_data->mms_id) ? (string) $itemXml->bib_data->mms_id : $mms_id;
+                            $displayProcessType = isset($itemXml->item_data->process_type) ? (string) $itemXml->item_data->process_type : $process_type;
 
                             if (!$alreadyCheckedIn && $scanSucceeded) {
                                 $itemXml->item_data->internal_note_3 = 'SCF Hold Shelf';
