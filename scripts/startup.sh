@@ -2,7 +2,6 @@
 
 # Azure Web App startup script to configure nginx for public directory
 
-# Configure nginx to use public directory as document root
 cat > /etc/nginx/sites-available/default << 'EOF'
 server {
     listen 8080;
@@ -25,6 +24,3 @@ server {
     }
 }
 EOF
-
-# Restart nginx to apply the new configuration
-service nginx restart
