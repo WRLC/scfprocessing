@@ -387,7 +387,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
                         $post_httpcode = (int) $scanResponse['status'];
 
                         if ($post_httpcode === 200) {
-                            echo '<div class="alert alert-primary text-center"><h4>Barcode ' . h($barcode) . ' has been checked in.</h4>';
                             $status = "Item In Place";
                             $scanSucceeded = true;
                         } else {
