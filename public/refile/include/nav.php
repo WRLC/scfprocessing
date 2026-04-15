@@ -32,4 +32,3 @@
     </div>
   </div>
 </nav>
-<div class="alert text-center alert-danger">Test Site: Do not use for Production. Use <a class="badge badge-danger" style="font-size:18px;" href="https://scf.app.wrlc.org/refile/" target="_blank">https://scf.app.wrlc.org/refile/</a></div>
