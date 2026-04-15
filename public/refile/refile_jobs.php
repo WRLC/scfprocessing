@@ -341,8 +341,10 @@ async function deleteCompleted() {
 }
 
 loadJobs();
-setInterval(loadJobs, 2000);
-setInterval(tickWorker, 2500);
+tickWorker();
+
+setInterval(loadJobs, 10000);    // every 10 seconds
+setInterval(tickWorker, 15000);  // every 15 seconds
 </script>
 </body>
 </html>
