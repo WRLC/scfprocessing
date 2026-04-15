@@ -44,7 +44,7 @@
     <li>temp location - ""</li>
         </ul>
     </p>
-     <a href="refile_upload.php" class="btn btn-primary">Bulk</a> <a href="refile_update.php" class="btn btn-primary">Single</a> </div>
+     <a href="refile_upload_bg.php" class="btn btn-primary">Batch</a> <a href="refile_jobs.php" class="btn btn-primary">View Jobs</a> <a href="refile_update.php" class="btn btn-primary">Single</a> </div>
 
   </div>
 </div>
