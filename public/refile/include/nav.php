@@ -1,4 +1,3 @@
-<?php include 'refresh.php';?>
 <nav class="navbar navbar-expand-sm navbar-dark text-white" style="background-color:#2196F3;">
 <a class="navbar-brand" href="#"></a>
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
@@ -14,8 +13,10 @@
           Reshelf
         </a>
         <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-          <a class="dropdown-item" href="refile_upload.php">Bulk</a>
+          <a class="dropdown-item" href="refile_upload_bg.php">Batch Processing</a>
+          <a class="dropdown-item" href="refile_jobs.php">View Jobs</a>
           <a class="dropdown-item" href="refile_update.php">Single Item</a>
+          <a class="dropdown-item" href="refile_upload.php">Previous Version</a>
         </div>
       </li><span class="nav-link">|</span>
       <?php if (isset($_SESSION['user_id']) and $_SESSION['admin'] == 'yes') {
@@ -23,7 +24,7 @@
      <a class="nav-item nav-link text-white" href="refile_summary.php">Summary</a><span class="nav-link">|</span>
       <a class="nav-item nav-link text-white" href="refile_errors.php">Mismatched Trays</a><span class="nav-link">|</span>
       <a class="nav-item nav-link text-white" href="hold_shelf.php">Hold Shelf List</a><span class="nav-link">|</span>
-      <a class="nav-item nav-link text-white" href="refile_month.php">Alma Stats</a><span class="nav-link">|</span>';
+      <a class="nav-item nav-link text-white" href="refile_date.php">Alma Stats</a><span class="nav-link">|</span>';
 }
 ;?>
 <a class="nav-item nav-link text-white" href="check.php">Item Check</a>
@@ -31,3 +32,4 @@
     </div>
   </div>
 </nav>
+<div class="alert text-center alert-danger">Test Site: Do not use for Production. Use <a class="badge badge-danger" style="font-size:18px;" href="https://scf.app.wrlc.org/refile/" target="_blank">https://scf.app.wrlc.org/refile/</a></div>
