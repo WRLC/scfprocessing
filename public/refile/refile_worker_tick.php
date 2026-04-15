@@ -34,7 +34,7 @@ function saveJob(array $job)
 
 function summaryFilePath()
 {
-    return dirname(__FILE__) . '/summary.ndjson';
+    return dirname(__FILE__) . '/refile.ndjson';
 }
 
 function appendSummaryEntry(array $entry)
