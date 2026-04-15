@@ -12,3 +12,4 @@ tfplan
 terraform.tfvars
 refile/data/
 refile/refile.ndjson
+*.txt
