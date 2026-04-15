@@ -227,17 +227,20 @@ if($CheckedOutFlag =='true') echo '<li><a href="#!"><i class="material-icons lef
 
 
       <?php
+$time_out = null;
+$staffID = '';
 
-$sqld = "SELECT * FROM deaccessionHours WHERE staffID = '$staffkey'";
-$queryd 	= mysqli_query($conn, $sqld);
-while ($rowd = mysqli_fetch_array($queryd))
-{
-$time_out = strtotime($rowd['time_Out']);
-$staffID = $rowd['staffID'];
+$sqld = "SELECT * FROM deaccessionHours WHERE staffID = '$staffkey' LIMIT 1";
+$queryd = mysqli_query($conn, $sqld);
+
+if ($queryd && $rowd = mysqli_fetch_assoc($queryd)) {
+    $time_out = !empty($rowd['time_Out']) ? strtotime($rowd['time_Out']) : null;
+    $staffID = $rowd['staffID'] ?? '';
 }
-if($time_out == NULL AND $staffID == $staffkey)
-echo '<li><a href="deaccessionin.php" class="waves-effect waves-light btn purple"><i class="material-icons left">developer_board</i>Project Hours Active</a></li>';
 
+if ($time_out == null && $staffID == $staffkey) {
+    echo '<li><a href="deaccessionin.php" class="waves-effect waves-light btn purple"><i class="material-icons left">developer_board</i>Project Hours Active</a></li>';
+}
 ?>
 
 
