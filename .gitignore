@@ -10,3 +10,5 @@ backend.hcl
 .terraform
 tfplan
 terraform.tfvars
+refile/data/
+refile/summary.ndjson
