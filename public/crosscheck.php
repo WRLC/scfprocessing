@@ -6,10 +6,11 @@ if ( isset( $_SESSION['user_id'] ) ) {
     // Let them access the "logged in only" pages
 	$now = time(); // Checking the time now when home page starts.
 
-        if ($now > $_SESSION['expire']) {
-            session_destroy();
-            header("Location: login.php");
-        }
+    if (!isset($_SESSION['expire']) || $now > (int)$_SESSION['expire']) {
+        session_destroy();
+        header("Location: login.php");
+        exit;
+    }
 	
 	
 } else {
@@ -53,10 +54,10 @@ if ( isset( $_SESSION['user_id'] ) ) {
             <?php
 
 $name = $_SESSION['user_id'];
-$submit = $_GET['submit'];
+$submit = $_GET['submit'] ?? '';
 
-if($submit == 'true') echo '<div id="hideMe" class="card-title green-text center">Success!</div>';
-if($submit == 'blank') echo '<div id="hideMe" class="card-title red-text center">Form not submitted. Please fill in all required fields.</div>';
+if($submit === 'true') echo '<div id="hideMe" class="card-title green-text center">Success!</div>';
+if($submit === 'blank') echo '<div id="hideMe" class="card-title red-text center">Form not submitted. Please fill in all required fields.</div>';
 
 $formurl = 'all_crosscheck_submit.php'; ?>
             <!--<script type="text/javascript">var submitted=false;</script>
