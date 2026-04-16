@@ -54,7 +54,6 @@ if ($result instanceof mysqli_result) {
     mysqli_free_result($result);
 }
 ?>
-<?php include('header.php'); ?>
 <div class="row">
     <div class="col s12 push-m4 m4">
         <div class="card white lighten-1 mt-5">
