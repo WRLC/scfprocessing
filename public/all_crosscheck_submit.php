@@ -1,47 +1,75 @@
 <?php
-require_once('connect.php');
-//Convert POST form variables
+declare(strict_types=1);
 
-$CCName = filter_var($_POST['ccname'], FILTER_SANITIZE_STRING);
-$ProcessingKey = filter_var($_POST['ProcessingKey'], FILTER_SANITIZE_STRING);
-$CCCount = filter_var($_POST['cccount'], FILTER_SANITIZE_STRING);
-$CCVerify = filter_var($_POST['ccverify'], FILTER_SANITIZE_STRING);
-$CCChecked = filter_var($_POST['ccchecked'], FILTER_SANITIZE_STRING);
-$CCScan = filter_var($_POST['ccscan'], FILTER_SANITIZE_STRING);
+require_once 'connect.php';
 
-
-if($CCCount =='' OR $CCVerify =='' OR $CCChecked =='')
-header( 'Location: crosscheck.php?submit=blank' ) ;
-
-else {
-
-
-
-$sql ="UPDATE ProcessingAll 
-SET 
-	cctimestamp = CURRENT_TIMESTAMP,
-    ccname = '$CCName',
-	cccount = '$CCCount',
-	ccverify = '$CCVerify',
-	ccchecked = '$CCChecked',
-    ccscan = '$CCScan',
-    updated = CURRENT_TIMESTAMP
-	
-WHERE
-    ProcessingKey = $ProcessingKey";
-	
-	if ($conn->query($sql) === TRUE) {
-	header( 'Location: crosscheck.php?submit=true' ) ;
-   // echo "success!";
-} else {
-    echo "Error: " . $sql . "<br>" . $conn->error;
-}
+if (!isset($conn) || !($conn instanceof mysqli)) {
+    error_log('Database connection not available in all_crosscheck_submit.php');
+    header('Location: crosscheck.php?submit=dberror');
+    exit;
 }
 
-$conn->close();
+$ccName = trim((string)($_POST['ccname'] ?? ''));
+$processingKeyRaw = trim((string)($_POST['ProcessingKey'] ?? ''));
+$ccCount = trim((string)($_POST['cccount'] ?? ''));
+$ccVerify = trim((string)($_POST['ccverify'] ?? ''));
+$ccChecked = trim((string)($_POST['ccchecked'] ?? ''));
+$ccScan = trim((string)($_POST['ccscan'] ?? ''));
 
-if (!empty($conn)) {
-    mysqli_close($conn);
+if ($processingKeyRaw === '' || !ctype_digit($processingKeyRaw)) {
+    header('Location: crosscheck.php?submit=blank');
+    exit;
 }
 
+$processingKey = (int)$processingKeyRaw;
+
+if ($ccCount === '' || $ccVerify === '' || $ccChecked === '') {
+    header('Location: crosscheck.php?submit=blank');
+    exit;
+}
+
+$sql = "
+    UPDATE ProcessingAll
+    SET
+        cctimestamp = CURRENT_TIMESTAMP,
+        ccname = ?,
+        cccount = ?,
+        ccverify = ?,
+        ccchecked = ?,
+        ccscan = ?,
+        updated = CURRENT_TIMESTAMP
+    WHERE ProcessingKey = ?
+";
+
+$stmt = $conn->prepare($sql);
+
+if (!$stmt) {
+    error_log('Prepare failed in all_crosscheck_submit.php: ' . $conn->error);
+    header('Location: crosscheck.php?submit=dberror');
+    exit;
+}
+
+$stmt->bind_param(
+    'sssssi',
+    $ccName,
+    $ccCount,
+    $ccVerify,
+    $ccChecked,
+    $ccScan,
+    $processingKey
+);
+
+if ($stmt->execute()) {
+    $stmt->close();
+    header('Location: crosscheck.php?submit=true');
+    exit;
+}
+
+$errorCode = $conn->errno;
+$errorText = $stmt->error;
+$stmt->close();
+
+error_log("Update failed in all_crosscheck_submit.php: [$errorCode] $errorText");
+header('Location: crosscheck.php?submit=dberror');
+exit;
 ?>
