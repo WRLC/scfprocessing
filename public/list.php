@@ -47,6 +47,11 @@ $sql   = "SELECT * FROM ProcessingAll {$searchstring} {$daterange} ORDER BY {$or
 $query = mysqli_query($conn, $sql);
 $row_cnt = mysqli_num_rows($query);
 ?>
+<?php
+function h($value): string {
+    return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
+}
+?>
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
 <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
 <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
@@ -247,17 +252,53 @@ $row_cnt = mysqli_num_rows($query);
                 ?>
                 <?php if ($difference > 0) echo '<tr class="red lighten-4">'; else echo '<tr>'; ?>
               
-                  <td style="min-width:200px;"><a class="btn-small purple lighten-1 bold no-shadow" href="edit.php?id=<?php echo $row['ProcessingKey']; ?>"><?php echo htmlspecialchars($row['ptraylocation']); ?></a></td>
-                  <td class="center-align clip"><?php echo htmlspecialchars($row['plibrary']); ?></td>
-                  <td class="clip"><?php echo htmlspecialchars($row['pname']); ?></td>
-                  <td class="clip"><?php echo $processing_date; ?></td>
-                  <td class="center-align" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><a href="almacount.php?id=<?php echo $row['ProcessingKey']; ?>"><?php echo $row['pcount']; ?></a></td>
-                  <td class="center-align" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><?php echo htmlspecialchars($row['pfull']); ?></td>
-                  <td class="clip"><?php echo htmlspecialchars($row['ccname']); ?></td>
-                  <td class="clip"><?php echo $cc_date; ?></td>
-                  <td class="center-align" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><?php echo $row['cccount']; ?></td>
-                  <td class="center-align" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><?php if ($difference > 0): ?><span class="new badge red" data-badge-caption=""><?php echo $difference; ?></span><?php endif; ?></td>
-                </tr>
+                <td style="min-width:200px;">
+  <a class="btn-small purple lighten-1 bold no-shadow" href="edit.php?id=<?php echo (int)$row['ProcessingKey']; ?>">
+    <?php echo h($row['ptraylocation']); ?>
+  </a>
+</td>
+
+<td class="center-align clip">
+  <?php echo h($row['plibrary']); ?>
+</td>
+
+<td class="clip">
+  <?php echo h($row['pname']); ?>
+</td>
+
+<td class="clip">
+  <?php echo h($processing_date ?? ''); ?>
+</td>
+
+<td class="center-align" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+  <a href="almacount.php?id=<?php echo (int)$row['ProcessingKey']; ?>">
+    <?php echo h($row['pcount']); ?>
+  </a>
+</td>
+
+<td class="center-align" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+  <?php echo h($row['pfull']); ?>
+</td>
+
+<td class="clip">
+  <?php echo h($row['ccname']); ?>
+</td>
+
+<td class="clip">
+  <?php echo h($cc_date ?? ''); ?>
+</td>
+
+<td class="center-align" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+  <?php echo h($row['cccount']); ?>
+</td>
+
+<td class="center-align" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+  <?php if ($difference > 0): ?>
+    <span class="new badge red" data-badge-caption="">
+      <?php echo (int)$difference; ?>
+    </span>
+  <?php endif; ?>
+</td> </tr>
               <?php endwhile; ?>
             </tbody>
           </table>
