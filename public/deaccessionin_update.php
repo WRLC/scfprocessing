@@ -17,5 +17,7 @@ WHERE
     echo "Error: " . $sql . "<br>" . $conn->error;
 }
 $conn->close();
-mysqli_close($conn);
+if (!empty($conn)) {
+    mysqli_close($conn);
+}
 ?>

@@ -3,16 +3,21 @@ declare(strict_types=1);
 
 session_start();
 
+$timeoutSeconds = 1800;
+
 if (!isset($_SESSION['user_id'], $_SESSION['expire'])) {
     header('Location: login.php');
     exit;
 }
 
 if (time() > (int)$_SESSION['expire']) {
+    $_SESSION = [];
     session_destroy();
     header('Location: login.php');
     exit;
 }
+
+$_SESSION['expire'] = time() + $timeoutSeconds;
 
 include 'header.php';
 
