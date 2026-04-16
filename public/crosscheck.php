@@ -12,7 +12,6 @@ if ( isset( $_SESSION['user_id'] ) ) {
         exit;
     }
 	
-	
 } else {
     // Redirect them to the login page
     header("Location: login.php");
