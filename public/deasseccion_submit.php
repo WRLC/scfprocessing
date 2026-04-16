@@ -28,7 +28,9 @@ WHERE
 
 $conn->close();
 
-mysqli_close($conn);
+if (!empty($conn)) {
+    mysqli_close($conn);
+}
 
 
 
