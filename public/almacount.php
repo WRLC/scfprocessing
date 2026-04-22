@@ -140,7 +140,7 @@ $id = $_GET['id'];
 </style>
 <?php
 
-
+$submit = $_GET['submit'] ?? '';
 
 if($submit == 'true') echo '<div id="hideMe" class="card-title" style="color:#4CAF50;">Success!</div>'; ?>
 <div class="row">
