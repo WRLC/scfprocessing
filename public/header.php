@@ -272,7 +272,7 @@ $sqld = "SELECT * FROM deaccessionHours WHERE staffID = '$staffkey'";
 $queryd 	= mysqli_query($conn, $sqld);
 while ($rowd = mysqli_fetch_array($queryd))
 {
-$time_out = strtotime($rowd['time_Out']);
+  $time_out = !empty($rowd['time_Out']) ? strtotime($rowd['time_Out']) : null;
 $staffID = $rowd['staffID'];
 }
 if($time_out == NULL AND $staffID == $staffkey)
