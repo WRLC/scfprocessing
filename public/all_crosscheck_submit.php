@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 require_once 'connect.php';
 
+date_default_timezone_set('America/New_York');
+
 if (!isset($conn) || !($conn instanceof mysqli)) {
     error_log('Database connection not available in all_crosscheck_submit.php');
     header('Location: crosscheck.php?submit=dberror');
@@ -23,21 +25,23 @@ if ($processingKeyRaw === '' || !ctype_digit($processingKeyRaw)) {
 
 $processingKey = (int)$processingKeyRaw;
 
-if ($ccCount === '' || $ccVerify === '' || $ccChecked === '') {
+if ($ccName === '' || $ccCount === '' || $ccVerify === '' || $ccChecked === '') {
     header('Location: crosscheck.php?submit=blank');
     exit;
 }
 
+$timestamp = date('Y-m-d H:i:s');
+
 $sql = "
     UPDATE ProcessingAll
     SET
-        cctimestamp = CURRENT_TIMESTAMP,
+        cctimestamp = ?,
         ccname = ?,
         cccount = ?,
         ccverify = ?,
         ccchecked = ?,
         ccscan = ?,
-        updated = CURRENT_TIMESTAMP
+        updated = ?
     WHERE ProcessingKey = ?
 ";
 
@@ -50,17 +54,20 @@ if (!$stmt) {
 }
 
 $stmt->bind_param(
-    'sssssi',
+    'sssssssi',
+    $timestamp,
     $ccName,
     $ccCount,
     $ccVerify,
     $ccChecked,
     $ccScan,
+    $timestamp,
     $processingKey
 );
 
 if ($stmt->execute()) {
     $stmt->close();
+    $conn->close();
     header('Location: crosscheck.php?submit=true');
     exit;
 }
@@ -68,8 +75,8 @@ if ($stmt->execute()) {
 $errorCode = $conn->errno;
 $errorText = $stmt->error;
 $stmt->close();
+$conn->close();
 
 error_log("Update failed in all_crosscheck_submit.php: [$errorCode] $errorText");
 header('Location: crosscheck.php?submit=dberror');
 exit;
-?>
