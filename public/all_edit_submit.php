@@ -1,85 +1,127 @@
 <?php
-require_once('connect.php');
-//Convert POST form variables
-$ProcessingKey = $_POST['ProcessingKey'];
+declare(strict_types=1);
 
-//$pname = $_POST['pname'];
+require_once 'connect.php';
 
+date_default_timezone_set('America/New_York');
 
-$ptraylocation = filter_var($_POST['ptraylocation'], FILTER_SANITIZE_STRING);
-$ptraylocation = !empty($ptraylocation) ? "'$ptraylocation'" : "NULL";
-
-$pcount = filter_var($_POST['pcount'], FILTER_SANITIZE_STRING);
-$pcount = !empty($pcount) ? "'$pcount'" : "NULL";
-
-$pfull = filter_var($_POST['pfull'], FILTER_SANITIZE_STRING);
-$pfull = !empty($pfull) ? "'$pfull'" : "NULL";
-
-$pverify = filter_var($_POST['pverify'], FILTER_SANITIZE_STRING);
-$pverify = !empty($pverify) ? "'$pverify'" : "NULL";
-
-$pchecked = filter_var($_POST['pchecked'], FILTER_SANITIZE_STRING);
-$pchecked = !empty($pchecked) ? "'$pchecked'" : "NULL";
-
-$plibrary = filter_var($_POST['plibrary'], FILTER_SANITIZE_STRING);
-$plibrary = !empty($plibrary) ? "'$plibrary'" : "NULL";
-
-//$ccname = $_POST['ccname'];
-$cccount = filter_var($_POST['cccount'], FILTER_SANITIZE_STRING);
-$cccount = !empty($cccount) ? "'$cccount'" : "NULL";
-
-$ccverify = filter_var($_POST['ccverify'], FILTER_SANITIZE_STRING);
-$ccverify = !empty($ccverify) ? "'$ccverify'" : "NULL";
-
-$ccchecked = filter_var($_POST['ccchecked'], FILTER_SANITIZE_STRING);
-$ccchecked = !empty($ccchecked) ? "'$ccchecked'" : "NULL";
-
-$ccscan = filter_var($_POST['ccscan'], FILTER_SANITIZE_STRING);
-$ccscan = !empty($ccscan) ? "'$ccscan'" : "NULL";
-
-$cctimestamp = filter_var($_POST['cctimestamp'], FILTER_SANITIZE_STRING);
-$cctimestamp = !empty($cctimestamp) ? "'$cctimestamp'" : "NULL";
-
-$ptimestamp = filter_var($_POST['ptimestamp'], FILTER_SANITIZE_STRING);
-$ptimestamp = !empty($ptimestamp) ? "'$ptimestamp'" : "NULL";
-
-
-$traytemp = filter_var($_POST['ptraylocation'], FILTER_SANITIZE_STRING);
-$pcode = substr($traytemp, -2);
-
-
-$sql ="UPDATE ProcessingAll 
-SET 
-
-	ptraylocation = $ptraylocation,
-	pcode = '$pcode',
-	pcount = $pcount,
-	pfull = $pfull,
-	pverify = $pverify,
-	pchecked = $pchecked,
-	plibrary = $plibrary,
-	cccount = $cccount,
-	ccverify = $ccverify,
-	cctimestamp = $cctimestamp,
-	ptimestamp = $ptimestamp,
-	ccchecked = $ccchecked,
-    ccscan = $ccscan,
-    updated = CURRENT_TIMESTAMP
-	
-WHERE
-    ProcessingKey = $ProcessingKey";
-	
-	if ($conn->query($sql) === TRUE) {
-	 header( 'Location: edit.php?id='.$ProcessingKey) ;
-   // echo "success!";
-} else {
-    echo "Error: " . $sql . "<br>" . $conn->error;
+if (!isset($conn) || !($conn instanceof mysqli)) {
+    error_log('Database connection not available in edit submit page');
+    header('Location: list.php?submit=dberror');
+    exit;
 }
 
+$processingKeyRaw = trim((string)($_POST['ProcessingKey'] ?? ''));
+
+if ($processingKeyRaw === '' || !ctype_digit($processingKeyRaw)) {
+    header('Location: list.php?submit=blank');
+    exit;
+}
+
+$ProcessingKey = (int)$processingKeyRaw;
+
+$ptraylocation = trim((string)($_POST['ptraylocation'] ?? ''));
+$pcount        = trim((string)($_POST['pcount'] ?? ''));
+$pfull         = trim((string)($_POST['pfull'] ?? ''));
+$pverify       = trim((string)($_POST['pverify'] ?? ''));
+$pchecked      = trim((string)($_POST['pchecked'] ?? ''));
+$plibrary      = trim((string)($_POST['plibrary'] ?? ''));
+
+$cccount       = trim((string)($_POST['cccount'] ?? ''));
+$ccverify      = trim((string)($_POST['ccverify'] ?? ''));
+$ccchecked     = trim((string)($_POST['ccchecked'] ?? ''));
+$ccscan        = trim((string)($_POST['ccscan'] ?? ''));
+
+$cctimestamp   = trim((string)($_POST['cctimestamp'] ?? ''));
+$ptimestamp    = trim((string)($_POST['ptimestamp'] ?? ''));
+
+$pcode = $ptraylocation !== '' ? substr($ptraylocation, -2) : '';
+
+$updated = date('Y-m-d H:i:s');
+
+/*
+|--------------------------------------------------------------------------
+| Normalize blank values to NULL
+|--------------------------------------------------------------------------
+*/
+$ptraylocation = $ptraylocation !== '' ? $ptraylocation : null;
+$pcode         = $pcode !== '' ? $pcode : null;
+$pcount        = $pcount !== '' ? $pcount : null;
+$pfull         = $pfull !== '' ? $pfull : null;
+$pverify       = $pverify !== '' ? $pverify : null;
+$pchecked      = $pchecked !== '' ? $pchecked : null;
+$plibrary      = $plibrary !== '' ? $plibrary : null;
+
+$cccount       = $cccount !== '' ? $cccount : null;
+$ccverify      = $ccverify !== '' ? $ccverify : null;
+$ccchecked     = $ccchecked !== '' ? $ccchecked : null;
+$ccscan        = $ccscan !== '' ? $ccscan : null;
+
+$cctimestamp   = $cctimestamp !== '' ? $cctimestamp : null;
+$ptimestamp    = $ptimestamp !== '' ? $ptimestamp : null;
+
+$sql = "
+    UPDATE ProcessingAll
+    SET
+        ptraylocation = ?,
+        pcode = ?,
+        pcount = ?,
+        pfull = ?,
+        pverify = ?,
+        pchecked = ?,
+        plibrary = ?,
+        cccount = ?,
+        ccverify = ?,
+        cctimestamp = ?,
+        ptimestamp = ?,
+        ccchecked = ?,
+        ccscan = ?,
+        updated = ?
+    WHERE ProcessingKey = ?
+";
+
+$stmt = $conn->prepare($sql);
+
+if (!$stmt) {
+    error_log('Prepare failed in edit submit page: ' . $conn->error);
+    header('Location: edit.php?id=' . $ProcessingKey . '&submit=dberror');
+    exit;
+}
+
+$stmt->bind_param(
+    'ssssssssssssssi',
+    $ptraylocation,
+    $pcode,
+    $pcount,
+    $pfull,
+    $pverify,
+    $pchecked,
+    $plibrary,
+    $cccount,
+    $ccverify,
+    $cctimestamp,
+    $ptimestamp,
+    $ccchecked,
+    $ccscan,
+    $updated,
+    $ProcessingKey
+);
+
+if ($stmt->execute()) {
+    $stmt->close();
+    $conn->close();
+
+    header('Location: edit.php?id=' . $ProcessingKey . '&submit=true');
+    exit;
+}
+
+$errorCode = $conn->errno;
+$errorText = $stmt->error;
+
+$stmt->close();
 $conn->close();
 
-mysqli_close($conn);
+error_log("Update failed in edit submit page: [$errorCode] $errorText");
 
-
-
-?>
+header('Location: edit.php?id=' . $ProcessingKey . '&submit=dberror');
+exit;
