@@ -59,12 +59,16 @@ if ($_SESSION['admin'] !=="yes") {
 </style>
             <?php
 
-$name = $_SESSION['user_id'];
-$submit = $_GET['submit'];
+$name = $_SESSION['user_id'] ?? '';
+$submit = $_GET['submit'] ?? '';
+$id = isset($_GET['id']) && ctype_digit((string)$_GET['id']) ? (int)$_GET['id'] : 0;
 
-$id = $_GET['id'];
+if ($id <= 0) {
+    header('Location: list.php');
+    exit;
+}
 
-if($submit == 'true') echo '<div id="hideMe" class="card-title center" style="color:#4CAF50;">Success!</div>';
+if($submit === 'true') echo '<div id="hideMe" class="card-title center" style="color:#4CAF50;">Success!</div>';
 
 
 $formurl = 'all_edit_submit.php'; ?>
