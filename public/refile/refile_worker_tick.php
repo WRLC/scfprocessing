@@ -6,7 +6,26 @@ include 'include/refile_alma.php';
 
 header('Content-Type: application/json');
 
+
 ensureRefileDirs();
+
+$workerLockFile = refileDataDir() . '/worker.lock';
+$workerLockHandle = fopen($workerLockFile, 'c');
+
+if (!$workerLockHandle) {
+    echo json_encode(['ok' => false, 'error' => 'Unable to create worker lock.']);
+    exit;
+}
+
+if (!flock($workerLockHandle, LOCK_EX | LOCK_NB)) {
+    echo json_encode(['ok' => true, 'message' => 'Worker already running.']);
+    exit;
+}
+
+register_shutdown_function(function () use ($workerLockHandle) {
+    flock($workerLockHandle, LOCK_UN);
+    fclose($workerLockHandle);
+});
 
 function getNextRunnableJob()
 {
@@ -34,7 +53,7 @@ function saveJob(array $job)
 
 function summaryFilePath()
 {
-    return dirname(__FILE__) . '/refile.ndjson';
+    return dirname(__FILE__) . '/summary.ndjson';
 }
 
 function appendSummaryEntry(array $entry)
@@ -92,7 +111,7 @@ function processAnalyzeJob(array $job, $apiKey)
 
     $existingItems = getJobItems($job['id']);
     $alreadyProcessed = count($existingItems);
-    $chunkSize = 10;
+    $chunkSize = 5;
     $processedThisTick = 0;
 
     for ($pairIndex = $alreadyProcessed; $pairIndex < $job['total_pairs'] && $processedThisTick < $chunkSize; $pairIndex++) {
@@ -221,6 +240,7 @@ function processAnalyzeJob(array $job, $apiKey)
         appendJobItem($job['id'], $item);
         $job['processed_pairs']++;
         $processedThisTick++;
+        saveJob($job);
     }
 
     if ($job['processed_pairs'] >= $job['total_pairs']) {
@@ -250,7 +270,7 @@ function processApplyJob(array $job, $apiKey)
 
     $parentJobId = isset($job['parent_job_id']) ? (int)$job['parent_job_id'] : 0;
     $items = getJobItems($parentJobId);
-    $chunkSize = 10;
+    $chunkSize = 3;
     $processedThisTick = 0;
 
     foreach ($items as &$item) {
@@ -340,6 +360,7 @@ function processApplyJob(array $job, $apiKey)
     }
 
     writeNdjsonFile(getJobItemsFile($parentJobId), $items);
+    saveJob($job);
 
     if ($job['processed_pairs'] >= $job['total_pairs']) {
         $job['status'] = 'completed';

@@ -85,6 +85,8 @@ foreach ($rows as $row) {
     $grandTotal += $col6;
 }
 
+echo '<a class="btn btn-info" href="refile_date.php">View by Date Range</a><br /><br />';
+
 // Sort months descending by timestamp (most recent first)
 uasort($dataByMonth, function($a, $b) {
     return ($b['ts'] <=> $a['ts']);
@@ -148,7 +150,7 @@ foreach ($dataByMonth as $month => $info) {
 }
 
 echo '</table>
-<a class="btn btn-info" href="refile_date.php">View by Date Range</a>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>

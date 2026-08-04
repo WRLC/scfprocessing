@@ -26,6 +26,12 @@
             display: block;
             margin-top: 0.25rem;
         }
+        .job-warning-small {
+            font-size: 0.85rem;
+            color: #856404;
+            display: block;
+            margin-top: 0.25rem;
+        }
     </style>
 </head>
 <body>
@@ -35,6 +41,7 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="mb-0">Refile Jobs</h2>
         <div>
+            <button class="btn btn-outline-secondary mr-2" onclick="manualRefreshJobs()">Refresh</button>
             <a href="refile_upload_bg.php" class="btn btn-primary">Upload New File</a>
             <button class="btn btn-outline-danger ml-2" onclick="deleteCompleted()">Delete Completed</button>
         </div>
@@ -53,7 +60,7 @@
                 <th>Items Not Yet Checked In</th>
                 <th>Already Fully Processed</th>
                 <th>Last Error</th>
-                <th style="min-width: 320px;">Action</th>
+                <th style="min-width: 360px;">Action</th>
             </tr>
         </thead>
         <tbody></tbody>
@@ -75,7 +82,9 @@ function statusBadge(status) {
         applying: 'info',
         completed: 'success',
         failed: 'danger',
-        refile_completed: 'success'
+        refile_completed: 'success',
+        check_completed_waiting_for_status: 'warning',
+        possibly_stuck: 'warning'
     };
 
     const labelMap = {
@@ -86,7 +95,9 @@ function statusBadge(status) {
         applying: 'Applying Refile',
         completed: 'Completed',
         failed: 'Failed',
-        refile_completed: 'Refile Completed'
+        refile_completed: 'Refile Completed',
+        check_completed_waiting_for_status: 'Check Complete - Needs Refresh',
+        possibly_stuck: 'Possibly Stuck'
     };
 
     const cls = map[status] || 'secondary';
@@ -107,6 +118,10 @@ function escapeHtml(value) {
         .replaceAll("'", '&#039;');
 }
 
+function isCompleteStatus(status) {
+    return ['ready_to_refile', 'completed_no_eligible_items', 'refile_completed', 'completed', 'failed'].includes(status || '');
+}
+
 function normalizeJobsForDisplay(jobs) {
     const analyzeJobs = [];
     const applyJobsByParent = {};
@@ -121,8 +136,12 @@ function normalizeJobsForDisplay(jobs) {
 
     return analyzeJobs.map(analyzeJob => {
         const applyJob = applyJobsByParent[String(analyzeJob.id)] || null;
+        const checkProcessed = Number(analyzeJob.processed_pairs || 0);
+        const checkTotal = Number(analyzeJob.total_pairs || 0);
+        const checkIsNumericallyComplete = checkTotal > 0 && checkProcessed >= checkTotal;
 
         let displayStatus = analyzeJob.status || '';
+        let needsStatusRefresh = false;
 
         if (applyJob) {
             if (applyJob.status === 'completed') {
@@ -132,6 +151,9 @@ function normalizeJobsForDisplay(jobs) {
             } else if (applyJob.status === 'failed') {
                 displayStatus = 'failed';
             }
+        } else if ((analyzeJob.status === 'running' || analyzeJob.status === 'queued') && checkIsNumericallyComplete) {
+            displayStatus = 'check_completed_waiting_for_status';
+            needsStatusRefresh = true;
         }
 
         let lastError = analyzeJob.last_error || '';
@@ -143,7 +165,9 @@ function normalizeJobsForDisplay(jobs) {
             analyzeJob,
             applyJob,
             displayStatus,
-            lastError
+            lastError,
+            checkIsNumericallyComplete,
+            needsStatusRefresh
         };
     });
 }
@@ -166,14 +190,32 @@ function buildActionHtml(groupedJob) {
         html += `<button class="btn btn-sm btn-success" onclick="startApply(${analyzeJob.id})">Complete Refile</button>`;
     }
 
+    if (groupedJob.needsStatusRefresh) {
+        html += `<button class="btn btn-sm btn-warning" onclick="refreshJobStatus(${analyzeJob.id})">Refresh Status</button>`;
+
+        if (groupedJob.checkIsNumericallyComplete && Number(analyzeJob.eligible_for_apply_count || 0) > 0) {
+            html += `<button class="btn btn-sm btn-success" title="Use this if checked items passed but the job status is stuck." onclick="startApply(${analyzeJob.id})">Complete Eligible Items</button>`;
+        }
+    }
+
     const lockedStatuses = ['running', 'applying', 'queued'];
-    const analyzeLocked = lockedStatuses.includes(analyzeJob.status || '');
+    const analyzeLocked = lockedStatuses.includes(analyzeJob.status || '') && !groupedJob.checkIsNumericallyComplete;
     const applyLocked = applyJob ? lockedStatuses.includes(applyJob.status || '') : false;
     const deleteDisabled = (analyzeLocked || applyLocked)
         ? 'disabled title="Cannot delete a running job."'
         : '';
 
-    html += `<button class="btn btn-sm btn-danger" onclick="deleteJob(${analyzeJob.id})" ${deleteDisabled}>Delete</button>`;
+    const showRetryButton = groupedJob.needsStatusRefresh ||
+        displayStatus === 'failed' ||
+        analyzeJob.status === 'running' ||
+        analyzeJob.status === 'queued' ||
+        displayStatus === 'applying';
+
+    if (showRetryButton) {
+        html += `<button class="btn btn-sm btn-outline-danger" title="Use this if the job is stuck or needs to be rerun." onclick="deleteJob(${analyzeJob.id}, 'retry')">Delete and Retry</button>`;
+    }
+
+    html += `<button class="btn btn-sm btn-danger" onclick="deleteJob(${analyzeJob.id}, 'delete')" ${deleteDisabled}>Delete</button>`;
     html += `</div>`;
 
     return html;
@@ -201,6 +243,10 @@ function buildStatusHtml(groupedJob) {
         html += `<span class="job-meta-small">Apply job #${escapeHtml(applyJob.id)}</span>`;
     } else {
         html += `<span class="job-meta-small">Check job #${escapeHtml(analyzeJob.id)}</span>`;
+    }
+
+    if (groupedJob.needsStatusRefresh) {
+        html += `<span class="job-warning-small">All checked items are processed, but the job status did not advance. Use Refresh Status.</span>`;
     }
 
     return html;
@@ -275,6 +321,16 @@ async function tickWorker() {
     }
 }
 
+async function manualRefreshJobs() {
+    await tickWorker();
+    await loadJobs();
+}
+
+async function refreshJobStatus(jobId) {
+    await tickWorker();
+    await loadJobs();
+}
+
 async function startApply(jobId) {
     const body = new URLSearchParams();
     body.append('job_id', jobId);
@@ -288,6 +344,19 @@ async function startApply(jobId) {
 
         const text = await response.text();
         console.log('startApply:', text);
+
+        let data = null;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            data = null;
+        }
+
+        if (!response.ok || (data && data.ok === false)) {
+            const message = data && data.error ? data.error : 'Unable to start apply job.';
+            alert(message);
+        }
+
         await loadJobs();
     } catch (e) {
         console.error('startApply failed:', e);
@@ -295,13 +364,18 @@ async function startApply(jobId) {
     }
 }
 
-async function deleteJob(jobId) {
-    if (!confirm('Delete this job and any related files?')) {
+async function deleteJob(jobId, mode) {
+    const message = mode === 'retry'
+        ? 'Delete this stuck job and its related files so you can upload it again?'
+        : 'Delete this job and any related files?';
+
+    if (!confirm(message)) {
         return;
     }
 
     const body = new URLSearchParams();
     body.append('job_id', jobId);
+    body.append('mode', mode || 'delete');
 
     try {
         const response = await fetch('refile_jobs_api.php?action=delete_job', {
@@ -320,7 +394,7 @@ async function deleteJob(jobId) {
 }
 
 async function deleteCompleted() {
-    if (!confirm('Delete all completed jobs and their related files?')) {
+    if (!confirm('Delete all completed apply jobs and their matching check jobs? Stuck, queued, running, and failed jobs will be left alone.')) {
         return;
     }
 
@@ -340,11 +414,26 @@ async function deleteCompleted() {
     }
 }
 
-loadJobs();
-tickWorker();
+async function handleStartApplyFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const startApplyJobId = params.get('start_apply');
 
-setInterval(loadJobs, 10000);    // every 10 seconds
-setInterval(tickWorker, 15000);  // every 15 seconds
+    if (!startApplyJobId) {
+        return;
+    }
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    await loadJobs();
+
+    if (confirm('Begin completion process for eligible items in job #' + startApplyJobId + '?')) {
+        await startApply(startApplyJobId);
+    }
+}
+
+loadJobs().then(handleStartApplyFromUrl);
+setInterval(loadJobs, 2000);
+setInterval(tickWorker, 2500);
 </script>
 </body>
 </html>
