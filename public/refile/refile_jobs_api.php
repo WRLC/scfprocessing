@@ -73,20 +73,38 @@ function deleteJobAndChildrenById($jobId)
 function deleteCompletedJobs()
 {
     $jobs = getAllJobs();
-    $deletedIds = [];
+    $idsToDelete = [];
 
     foreach ($jobs as $job) {
+        $jobId = isset($job['id']) ? (int)$job['id'] : 0;
         $status = isset($job['status']) ? (string)$job['status'] : '';
-        if (in_array($status, completedStatuses(), true)) {
-            $jobId = (int)$job['id'];
-            if (!in_array($jobId, $deletedIds, true)) {
-                deleteJobAndChildrenById($jobId);
-                $deletedIds[] = $jobId;
+        $jobType = isset($job['job_type']) ? (string)$job['job_type'] : '';
+        $parentJobId = isset($job['parent_job_id']) ? (int)$job['parent_job_id'] : 0;
+
+        if ($jobId < 1) {
+            continue;
+        }
+
+        if ($jobType === 'apply' && $status === 'completed') {
+            $idsToDelete[] = $jobId;
+
+            if ($parentJobId > 0) {
+                $idsToDelete[] = $parentJobId;
             }
+        }
+
+        if ($jobType === 'analyze' && in_array($status, ['completed', 'completed_no_eligible_items'], true)) {
+            $idsToDelete[] = $jobId;
         }
     }
 
-    return count($deletedIds);
+    $idsToDelete = array_values(array_unique(array_map('intval', $idsToDelete)));
+
+    foreach ($idsToDelete as $jobId) {
+        deleteJobAndChildrenById($jobId);
+    }
+
+    return count($idsToDelete);
 }
 
 if ($action === 'list') {
@@ -98,22 +116,64 @@ if ($action === 'start_apply' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $parentJobId = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
     $parentJob = getJobById($parentJobId);
 
-    if (!$parentJob || $parentJob['job_type'] !== 'analyze' || $parentJob['status'] !== 'ready_to_refile') {
+    if (!$parentJob || $parentJob['job_type'] !== 'analyze') {
         http_response_code(400);
         echo json_encode([
             'ok' => false,
-            'error' => 'Analyze job is not ready.'
+            'error' => 'Analyze job was not found.'
+        ]);
+        exit;
+    }
+
+    $parentStatus = isset($parentJob['status']) ? (string)$parentJob['status'] : '';
+    $parentTotalPairs = isset($parentJob['total_pairs']) ? (int)$parentJob['total_pairs'] : 0;
+    $parentProcessedPairs = isset($parentJob['processed_pairs']) ? (int)$parentJob['processed_pairs'] : 0;
+    $checkComplete = ($parentTotalPairs > 0 && $parentProcessedPairs >= $parentTotalPairs);
+
+    if ($parentStatus !== 'ready_to_refile' && !(in_array($parentStatus, ['running', 'queued'], true) && $checkComplete)) {
+        http_response_code(400);
+        echo json_encode([
+            'ok' => false,
+            'error' => 'Analyze job is not ready. The check phase must be complete before eligible items can be processed.'
         ]);
         exit;
     }
 
     $items = getJobItems($parentJobId);
+    if ($checkComplete && $parentStatus !== 'ready_to_refile') {
+        updateJob($parentJobId, function ($jobRow) {
+            $jobRow['status'] = 'ready_to_refile';
+            if (empty($jobRow['completed_at'])) {
+                $jobRow['completed_at'] = nowUtc();
+            }
+            $jobRow['last_error'] = '';
+            return $jobRow;
+        });
+    }
+
     $eligibleCount = 0;
 
     foreach ($items as $item) {
         $eligible = isset($item['eligible_for_apply']) ? (int)$item['eligible_for_apply'] : 0;
         if ($eligible === 1) {
             $eligibleCount++;
+        }
+    }
+
+    // Prevent duplicate apply jobs for this analyze job
+    $jobs = getAllJobs();
+    foreach ($jobs as $existingJob) {
+        if (
+            ($existingJob['job_type'] ?? '') === 'apply' &&
+            (int)($existingJob['parent_job_id'] ?? 0) === $parentJobId &&
+            in_array(($existingJob['status'] ?? ''), ['queued', 'applying', 'completed'], true)
+        ) {
+            http_response_code(400);
+            echo json_encode([
+                'ok' => false,
+                'error' => 'A completion job already exists for this file.'
+            ]);
+            exit;
         }
     }
 
@@ -162,6 +222,7 @@ if ($action === 'start_apply' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if ($action === 'delete_job' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $jobId = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    $mode = isset($_POST['mode']) ? trim((string)$_POST['mode']) : 'delete';
 
     if ($jobId < 1) {
         http_response_code(400);
@@ -183,11 +244,14 @@ if ($action === 'delete_job' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    if (isset($job['status']) && in_array($job['status'], ['running', 'applying'], true)) {
+    $isRunningJob = isset($job['status']) && in_array($job['status'], ['queued', 'running', 'applying'], true);
+    $isRetryDelete = ($mode === 'retry');
+
+    if ($isRunningJob && !$isRetryDelete) {
         http_response_code(400);
         echo json_encode([
             'ok' => false,
-            'error' => 'Cannot delete a running job.'
+            'error' => 'Cannot delete a running job. Use Delete and Retry if this job is stuck.'
         ]);
         exit;
     }

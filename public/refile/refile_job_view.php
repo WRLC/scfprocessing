@@ -67,6 +67,8 @@ $appliedCount = 0;
 $mismatchCount = 0;
 $eligibleCount = 0;
 $checkedOutCount = 0;
+$pendingCount = 0;
+$analyzedCount = 0;
 
 foreach ($items as $item) {
     if (($item['item_status'] ?? '') === 'failed') {
@@ -88,7 +90,25 @@ foreach ($items as $item) {
     if (($item['loan_status'] ?? '') === 'checked_out') {
         $checkedOutCount++;
     }
+
+    if (($item['item_status'] ?? '') === 'pending') {
+        $pendingCount++;
+    }
+
+    if (($item['item_status'] ?? '') === 'analyzed') {
+        $analyzedCount++;
+    }
 }
+
+$checkPhaseCanProceed = (
+    $view !== 'completed' &&
+    $job &&
+    ($job['job_type'] ?? '') === 'analyze' &&
+    $totalItems > 0 &&
+    $eligibleCount > 0 &&
+    $pendingCount === 0 &&
+    $failedCount === 0
+);
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -162,6 +182,11 @@ foreach ($items as $item) {
             <div class="text-muted"><?php echo h($pageSubtitle); ?></div>
         </div>
         <div>
+            <?php if ($checkPhaseCanProceed): ?>
+                <a href="refile_jobs.php?start_apply=<?php echo h($jobId); ?>" class="btn btn-success mr-2">
+                    Complete Refile for Eligible Items
+                </a>
+            <?php endif; ?>
             <a href="refile_jobs.php" class="btn btn-secondary">Back to Jobs</a>
         </div>
     </div>
@@ -265,6 +290,20 @@ foreach ($items as $item) {
             </div>
         </div>
 
+        <?php if ($checkPhaseCanProceed): ?>
+            <div class="alert alert-success">
+                All checked items on this page have completed step 1 successfully. There are
+                <strong><?php echo h($eligibleCount); ?></strong> eligible item(s) ready to complete.
+                <a href="refile_jobs.php?start_apply=<?php echo h($jobId); ?>" class="btn btn-sm btn-success ml-2">
+                    Complete Refile for Eligible Items
+                </a>
+            </div>
+        <?php elseif ($view !== 'completed' && $job && ($job['job_type'] ?? '') === 'analyze' && $eligibleCount > 0): ?>
+            <div class="alert alert-warning">
+                Eligible items exist, but the check phase has not fully passed yet. Resolve failed or pending items before completing the refile.
+            </div>
+        <?php endif; ?>
+
         <?php if (empty($items)): ?>
             <div class="alert alert-info">No items found for this view.</div>
         <?php else: ?>
@@ -273,7 +312,7 @@ foreach ($items as $item) {
                     <thead class="thead-dark">
                         <tr>
                             <th>Line</th>
-                            <th>Tray Barcode</th>
+                            <th>Scanned Tray Barcode</th>
                             <th>File Item Barcode</th>
                             <th>Resolved Item Barcode</th>
                             <th>Title</th>
