@@ -1,6 +1,7 @@
 <?php
 include 'include/access.php';
 include 'include/apikey.php';
+include 'include/refile_data_file.php';
 
 function h($value)
 {
@@ -510,7 +511,7 @@ if (isset($_POST['proceed'])) {
             echo "<td><span class='text-success'>Updated</span></td>";
             echo "</tr>";
 
-            $file = __DIR__ . '/refile.ndjson';
+            $file = refileEnsurePersistentNdjson();
 
             $jsonDate = date('Y-m-d H:i:s');
             $jsonName = $name;

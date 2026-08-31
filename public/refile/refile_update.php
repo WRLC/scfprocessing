@@ -1,6 +1,7 @@
 <?php
 include 'include/access.php';
 include 'include/apikey.php';
+include 'include/refile_data_file.php';
 
 function h($value)
 {
@@ -446,7 +447,7 @@ if (isset($_POST['proceed'])) {
                     $internalNote3 = isset($xml->item_data->internal_note_3) ? (string)$xml->item_data->internal_note_3 : '';
                     $mms_id = isset($xml->bib_data->mms_id) ? (string)$xml->bib_data->mms_id : '';
 
-                    $file = __DIR__ . '/refile.ndjson';
+                    $file = refileEnsurePersistentNdjson();
 
                     $jsonDate = date('Y-m-d H:i:s');
                     $jsonName = $name;

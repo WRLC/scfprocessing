@@ -1,6 +1,7 @@
 <?php
 include 'include/access.php';
 include 'include/admin_access.php';
+include 'include/refile_data_file.php';
 
 // Handle deletion before any output
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
@@ -13,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
 
 function deleteEntry(string $timestamp, string $identifier)
 {
-    $file     = __DIR__ . '/refile.ndjson';
+    $file     = refileEnsurePersistentNdjson();
     $tmpFile  = $file . '.tmp';
     $in  = fopen($file, 'r');
     $out = fopen($tmpFile, 'w');
@@ -53,7 +54,7 @@ function deleteEntry(string $timestamp, string $identifier)
     </div>
     <ul class="list-group list-group-flush">
       <?php
-      $file = __DIR__ . '/refile.ndjson';
+      $file = refileEnsurePersistentNdjson();
       if (file_exists($file) && filesize($file) > 0) {
           $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
           rsort($lines, SORT_STRING);

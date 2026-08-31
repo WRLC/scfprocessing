@@ -123,6 +123,7 @@ resource "azurerm_linux_web_app"  "main" {
     "DB_DBNAME"                             = azurerm_mysql_flexible_database.prod.name
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.prod.connection_string
     "PHP_INI_SCAN_DIR"                      = ":/home/site/wwwroot/ini"
+    "REFILE_NDJSON_PATH"                    = "/home/site/data/refile/refile.ndjson"
   }
 
   sticky_settings {
@@ -171,6 +172,7 @@ resource "azurerm_linux_web_app_slot" "stage" {
     "DB_DBNAME"                             = azurerm_mysql_flexible_database.stage.name
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.stage.connection_string
     "PHP_INI_SCAN_DIR"                      = ":/home/site/wwwroot/ini"
+    "REFILE_NDJSON_PATH"                    = "/home/site/data/refile/refile.ndjson"
   }
 
   logs {
