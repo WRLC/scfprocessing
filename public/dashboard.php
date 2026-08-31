@@ -447,6 +447,72 @@ function fetchSentIllDigitizationRequests(): ?array
     return ['months' => $summary, 'total' => $grandTotal];
 }
 
+function fetchMailedIllItems(): ?array
+{
+    $jsonKey = $_ENV['GOOGLE_SHEET'] ?? getenv('GOOGLE_SHEET');
+    if (!$jsonKey) {
+        return null;
+    }
+
+    $spreadsheetId = '1B7dFKheanzruRZB70AE_peDTZKaseEo2O2IeZbPyutc';
+    $metadataUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' . $spreadsheetId
+        . '?fields=sheets.properties.title&key=' . urlencode((string)$jsonKey);
+    $metadataJson = @file_get_contents($metadataUrl);
+    if ($metadataJson === false) {
+        return null;
+    }
+
+    $metadata = json_decode($metadataJson, true);
+    if (!isset($metadata['sheets']) || !is_array($metadata['sheets'])) {
+        return null;
+    }
+
+    $months = [];
+    foreach ($metadata['sheets'] as $sheet) {
+        $title = (string)($sheet['properties']['title'] ?? '');
+        if (preg_match('/^[A-Za-z]+ \d{4}$/', $title)) {
+            $months[] = $title;
+        }
+    }
+
+    usort($months, function (string $a, string $b): int {
+        return strtotime('1 ' . $b) <=> strtotime('1 ' . $a);
+    });
+
+    $summary = [];
+    $grandTotal = 0;
+
+    foreach ($months as $monthTitle) {
+        $range = rawurlencode("'" . str_replace("'", "''", $monthTitle) . "'!A1:B20");
+        $url = 'https://sheets.googleapis.com/v4/spreadsheets/' . $spreadsheetId
+            . '/values/' . $range
+            . '?valueRenderOption=UNFORMATTED_VALUE&key=' . urlencode((string)$jsonKey);
+        $json = @file_get_contents($url);
+        if ($json === false) {
+            continue;
+        }
+
+        $data = json_decode($json, true);
+        $values = isset($data['values']) && is_array($data['values']) ? $data['values'] : [];
+        $monthlyTotal = 0;
+
+        foreach ($values as $row) {
+            if (trim((string)($row[0] ?? '')) === 'Matching Messages' && is_numeric($row[1] ?? null)) {
+                $monthlyTotal = (int)$row[1];
+                break;
+            }
+        }
+
+        $grandTotal += $monthlyTotal;
+        $summary[] = [
+            'month' => $monthTitle,
+            'total' => $monthlyTotal,
+        ];
+    }
+
+    return ['months' => $summary, 'total' => $grandTotal];
+}
+
 $today = new DateTimeImmutable('today');
 $previousMonthStartDate = $today->modify('first day of previous month');
 
@@ -471,6 +537,7 @@ $refileSummary = refileSummaryCounts(readRefileNdjson());
 $refileErrors = fetchRefileErrorsWithoutNotes();
 $usageSummary = fetchUsageSummaryByCubicFeet();
 $sentIllRequests = fetchSentIllDigitizationRequests();
+$mailedIllItems = fetchMailedIllItems();
 
 $holdShelfRows = null;
 if (!empty($api_key)) {
@@ -670,6 +737,16 @@ $usageChartData = [
     background: #0891b2;
 }
 
+.theme-orange {
+    background: #fff8f1;
+    border-color: #fed7aa;
+}
+
+.theme-orange:before,
+.theme-orange .card-icon {
+    background: #ea580c;
+}
+
 .metric-head {
     align-items: flex-start;
     display: flex;
@@ -696,6 +773,22 @@ $usageChartData = [
 .span-3 { grid-column: span 3; }
 .span-6 { grid-column: span 6; }
 .span-12 { grid-column: span 12; }
+
+.section-heading {
+    align-items: center;
+    color: #1f2937;
+    display: flex;
+    font-size: 1.65rem;
+    font-weight: 800;
+    gap: 10px;
+    grid-column: span 12;
+    margin: 8px 0 -4px;
+}
+
+.section-heading .material-icons {
+    color: #4f46e5;
+    font-size: 30px;
+}
 
 .metric-label {
     color: #607d8b;
@@ -1115,7 +1208,9 @@ $usageChartData = [
             </div>
         </article>
 
-        <article class="dash-card theme-indigo span-12">
+        <h2 class="section-heading"><i class="material-icons">local_post_office</i>ILL</h2>
+
+        <article class="dash-card theme-indigo span-6">
             <div class="card-content">
                 <div class="card-topline">
                     <div class="card-title-group">
@@ -1163,6 +1258,42 @@ $usageChartData = [
                             </details>
                         <?php endforeach; ?>
                     </div>
+                <?php endif; ?>
+            </div>
+        </article>
+
+        <article class="dash-card theme-orange span-6">
+            <div class="card-content">
+                <div class="card-topline">
+                    <div class="card-title-group">
+                        <span class="card-icon"><i class="material-icons">local_shipping</i></span>
+                        <h2>Mailed ILL Items</h2>
+                    </div>
+                    <a class="pill-link" target="_blank" href="https://docs.google.com/spreadsheets/d/1B7dFKheanzruRZB70AE_peDTZKaseEo2O2IeZbPyutc/edit?gid=527360498#gid=527360498"><i class="material-icons tiny">open_in_new</i>Open sheet</a>
+                </div>
+                <?php if (!is_array($mailedIllItems)): ?>
+                    <div class="status-note">Mailed ILL Sheet feed unavailable.</div>
+                <?php else: ?>
+                    <div class="usage-stat" style="margin-bottom:14px;">
+                        <span>All Months Combined</span>
+                        <strong><?php echo n($mailedIllItems['total']); ?></strong>
+                    </div>
+                    <table class="mini-table">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Matching Messages</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($mailedIllItems['months'] as $month): ?>
+                                <tr>
+                                    <td><?php echo h($month['month']); ?></td>
+                                    <td><?php echo n($month['total']); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
                 <?php endif; ?>
             </div>
         </article>
