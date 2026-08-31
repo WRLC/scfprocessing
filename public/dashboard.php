@@ -328,7 +328,7 @@ function fetchUsageSummaryByCubicFeet(): ?array
             'remaining_note' => !is_numeric($row[3] ?? null) ? (string)($row[3] ?? '') : '',
             'percent_used' => (float)($row[4] ?? 0),
             'reserved' => (float)($row[5] ?? 0),
-            'total_space' => (float)($row[6] ?? 0),
+            'total_cu_ft' => (float)($row[6] ?? 0),
         ];
 
         if (strtoupper($university) === 'TOTAL') {
@@ -346,14 +346,22 @@ function fetchUsageSummaryByCubicFeet(): ?array
 }
 
 $today = new DateTimeImmutable('today');
-$currentMonthStart = $today->modify('first day of this month')->format('Y-m-d 00:00:00');
-$currentMonthEnd = $today->modify('last day of this month')->format('Y-m-d 23:59:59');
 $previousMonthStartDate = $today->modify('first day of previous month');
-$previousMonthStart = $previousMonthStartDate->format('Y-m-d 00:00:00');
-$previousMonthEnd = $previousMonthStartDate->modify('last day of this month')->format('Y-m-d 23:59:59');
 
-$currentBilling = billingTotals($conn, $currentMonthStart, $currentMonthEnd);
-$previousBilling = billingTotals($conn, $previousMonthStart, $previousMonthEnd);
+$billingMonths = [];
+for ($i = 0; $i < 6; $i++) {
+    $monthDate = $today->modify('first day of this month')->modify("-{$i} months");
+    $monthStart = $monthDate->format('Y-m-d 00:00:00');
+    $monthEnd = $monthDate->modify('last day of this month')->format('Y-m-d 23:59:59');
+
+    $billingMonths[] = [
+        'label' => $monthDate->format('F Y'),
+        'totals' => billingTotals($conn, $monthStart, $monthEnd),
+        'url' => 'billing.php?begin=' . urlencode($monthDate->format('M 01, Y'))
+            . '&end=' . urlencode($monthDate->modify('last day of this month')->format('M d, Y')),
+    ];
+}
+
 $crosscheckCount = scalarQuery($conn, "SELECT COUNT(*) FROM ProcessingAll WHERE ccname IS NULL OR ccname = ''");
 $processedSevenDays = scalarQuery($conn, "SELECT COUNT(*) FROM ProcessingAll WHERE ptimestamp >= DATE_SUB(CURRENT_DATE, INTERVAL 7 DAY)");
 
@@ -405,33 +413,12 @@ if (is_array($almaStatsRows)) {
     ksort($almaByUniversity, SORT_NATURAL | SORT_FLAG_CASE);
 }
 
-$billingCurrentUrl = 'billing.php?begin=' . urlencode($today->modify('first day of this month')->format('M 01, Y')) . '&end=' . urlencode($today->modify('last day of this month')->format('M d, Y'));
-$billingPreviousUrl = 'billing.php?begin=' . urlencode($previousMonthStartDate->format('M 01, Y')) . '&end=' . urlencode($previousMonthStartDate->modify('last day of this month')->format('M d, Y'));
-
-$billingChartData = [
-    'labels' => [$today->format('M Y'), $previousMonthStartDate->format('M Y')],
-    'items' => [(int)$currentBilling['items'], (int)$previousBilling['items']],
-    'value' => [(float)$currentBilling['value'], (float)$previousBilling['value']],
-];
-
-$refileChartData = [
-    'labels' => array_keys($refileSummary),
-    'step1' => array_map(fn($steps) => (int)$steps[1], array_values($refileSummary)),
-    'step2' => array_map(fn($steps) => (int)$steps[2], array_values($refileSummary)),
-];
-
-$almaChartRows = array_slice($almaByUniversity, 0, 10, true);
-$almaChartData = [
-    'labels' => array_keys($almaChartRows),
-    'overall' => array_map(fn($counts) => (float)$counts['overall'], array_values($almaChartRows)),
-    'current' => array_map(fn($counts) => (float)$counts['current'], array_values($almaChartRows)),
-    'previous' => array_map(fn($counts) => (float)$counts['previous'], array_values($almaChartRows)),
-];
-
 $usageChartRows = is_array($usageSummary) ? $usageSummary['rows'] : [];
 $usageChartData = [
     'labels' => array_map(fn($row) => $row['university'], $usageChartRows),
+    'total' => array_map(fn($row) => (float)$row['total_cu_ft'], $usageChartRows),
     'used' => array_map(fn($row) => (float)$row['used'], $usageChartRows),
+    'reserved' => array_map(fn($row) => (float)$row['reserved'], $usageChartRows),
     'remaining' => array_map(fn($row) => max(0, (float)($row['remaining'] ?? 0)), $usageChartRows),
     'percent' => array_map(fn($row) => round((float)$row['percent_used'] * 100, 1), $usageChartRows),
 ];
@@ -690,7 +677,6 @@ $usageChartData = [
                 <div class="metric-label">Unprocessed Crosscheck</div>
                 <div class="metric-value"><?php echo n($crosscheckCount); ?></div>
                 <div class="metric-sub">Items waiting for crosscheck</div>
-                <div class="chart-wrap compact"><canvas id="workloadChart"></canvas></div>
                 <a class="pill-link" href="crosscheck.php"><i class="material-icons tiny">open_in_new</i>Open crosscheck</a>
             </div>
         </article>
@@ -700,7 +686,6 @@ $usageChartData = [
                 <div class="metric-label">Processed Last 7 Days</div>
                 <div class="metric-value"><?php echo n($processedSevenDays); ?></div>
                 <div class="metric-sub">Items from the processing list</div>
-                <div class="chart-wrap compact"><canvas id="processedChart"></canvas></div>
                 <a class="pill-link" href="list.php?order=ptimestamp&sort=DESC&date=WEEK"><i class="material-icons tiny">open_in_new</i>Open list</a>
             </div>
         </article>
@@ -710,7 +695,6 @@ $usageChartData = [
                 <div class="metric-label">Hold Shelf</div>
                 <div class="metric-value"><?php echo is_array($holdShelfRows) ? n(count($holdShelfRows)) : '-'; ?></div>
                 <div class="metric-sub"><?php echo is_array($holdShelfRows) ? 'Items currently on hold shelf' : 'Alma feed unavailable'; ?></div>
-                <div class="chart-wrap compact"><canvas id="holdShelfChart"></canvas></div>
                 <a class="pill-link" href="refile/hold_shelf.php"><i class="material-icons tiny">open_in_new</i>Open hold shelf</a>
             </div>
         </article>
@@ -720,7 +704,6 @@ $usageChartData = [
                 <div class="metric-label">Alma Refile Total</div>
                 <div class="metric-value"><?php echo is_array($almaStatsRows) ? n($almaGrandTotal) : '-'; ?></div>
                 <div class="metric-sub"><?php echo is_array($almaStatsRows) ? 'Overall count from Alma stats' : 'Alma feed unavailable'; ?></div>
-                <div class="chart-wrap compact"><canvas id="almaTotalChart"></canvas></div>
                 <a class="pill-link" href="refile/refile_month.php"><i class="material-icons tiny">open_in_new</i>Open Alma stats</a>
             </div>
         </article>
@@ -736,16 +719,16 @@ $usageChartData = [
                 <?php else: ?>
                     <div class="usage-metrics">
                         <div class="usage-stat">
-                            <span>Total Shelves</span>
-                            <strong><?php echo n($usageSummary['total']['shelves']); ?></strong>
+                            <span>Total Cu Ft</span>
+                            <strong><?php echo n($usageSummary['total']['total_cu_ft']); ?></strong>
                         </div>
                         <div class="usage-stat">
-                            <span>Cubic Feet Used</span>
+                            <span>Cu Ft Used</span>
                             <strong><?php echo n($usageSummary['total']['used']); ?></strong>
                         </div>
                         <div class="usage-stat">
-                            <span>Space Remaining</span>
-                            <strong><?php echo n($usageSummary['total']['remaining']); ?></strong>
+                            <span>Cu Ft Reserved</span>
+                            <strong><?php echo n($usageSummary['total']['reserved']); ?></strong>
                         </div>
                         <div class="usage-stat">
                             <span>Percent Used</span>
@@ -753,13 +736,15 @@ $usageChartData = [
                         </div>
                     </div>
                     <div class="chart-wrap tall"><canvas id="usageCubicFeetChart"></canvas></div>
+                    <div class="chart-wrap"><canvas id="usagePercentChart"></canvas></div>
                     <table class="mini-table">
                         <thead>
                             <tr>
                                 <th>University</th>
-                                <th>Shelves</th>
+                                <th>Total Cu Ft</th>
                                 <th>Cu Ft Used</th>
-                                <th>Remaining</th>
+                                <th>Cu Ft Reserved</th>
+                                <th>Cu Ft Remaining</th>
                                 <th>% Used</th>
                             </tr>
                         </thead>
@@ -767,8 +752,9 @@ $usageChartData = [
                             <?php foreach ($usageSummary['rows'] as $row): ?>
                                 <tr>
                                     <td><?php echo h($row['university']); ?></td>
-                                    <td><?php echo n($row['shelves']); ?></td>
+                                    <td><?php echo n($row['total_cu_ft']); ?></td>
                                     <td><?php echo n($row['used']); ?></td>
+                                    <td><?php echo n($row['reserved']); ?></td>
                                     <td>
                                         <?php echo $row['remaining'] === null ? h($row['remaining_note']) : n($row['remaining']); ?>
                                     </td>
@@ -785,10 +771,7 @@ $usageChartData = [
             <div class="card-content">
                 <div class="card-topline">
                     <h2>Billing Counts</h2>
-                    <div>
-                        <a class="pill-link" href="<?php echo h($billingCurrentUrl); ?>">Current</a>
-                        <a class="pill-link" href="<?php echo h($billingPreviousUrl); ?>">Previous</a>
-                    </div>
+                    <a class="pill-link" href="<?php echo h($billingMonths[0]['url']); ?>"><i class="material-icons tiny">open_in_new</i>Open current month</a>
                 </div>
                 <table class="mini-table">
                     <thead>
@@ -796,22 +779,20 @@ $usageChartData = [
                             <th>Period</th>
                             <th>Items</th>
                             <th>Estimated Billing</th>
+                            <th>Details</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td><?php echo h($today->format('F Y')); ?></td>
-                            <td><?php echo n($currentBilling['items']); ?></td>
-                            <td><?php echo money((float)$currentBilling['value']); ?></td>
-                        </tr>
-                        <tr>
-                            <td><?php echo h($previousMonthStartDate->format('F Y')); ?></td>
-                            <td><?php echo n($previousBilling['items']); ?></td>
-                            <td><?php echo money((float)$previousBilling['value']); ?></td>
-                        </tr>
+                        <?php foreach ($billingMonths as $billingMonth): ?>
+                            <tr>
+                                <td><?php echo h($billingMonth['label']); ?></td>
+                                <td><?php echo n($billingMonth['totals']['items']); ?></td>
+                                <td><?php echo money((float)$billingMonth['totals']['value']); ?></td>
+                                <td><a href="<?php echo h($billingMonth['url']); ?>">Open</a></td>
+                            </tr>
+                        <?php endforeach; ?>
                     </tbody>
                 </table>
-                <div class="chart-wrap"><canvas id="billingChart"></canvas></div>
             </div>
         </article>
 
@@ -829,7 +810,6 @@ $usageChartData = [
                         </div>
                     <?php endforeach; ?>
                 </div>
-                <div class="chart-wrap"><canvas id="refileSummaryChart"></canvas></div>
             </div>
         </article>
 
@@ -854,7 +834,6 @@ $usageChartData = [
                     <?php if (count($refileErrors['rows']) > 6): ?>
                         <p class="muted">Showing 6 of <?php echo n(count($refileErrors['rows'])); ?>.</p>
                     <?php endif; ?>
-                    <div class="chart-wrap compact"><canvas id="refileErrorsChart"></canvas></div>
                 <?php endif; ?>
             </div>
         </article>
@@ -868,6 +847,20 @@ $usageChartData = [
                 <?php if (!is_array($almaStatsRows)): ?>
                     <div class="status-note">Alma stats feed unavailable.</div>
                 <?php else: ?>
+                    <div class="usage-metrics" style="grid-template-columns: repeat(3, 1fr);">
+                        <div class="usage-stat">
+                            <span>Total Count</span>
+                            <strong><?php echo n($almaGrandTotal); ?></strong>
+                        </div>
+                        <div class="usage-stat">
+                            <span><?php echo h($currentMonthKey); ?></span>
+                            <strong><?php echo n(array_sum(array_column($almaByUniversity, 'current'))); ?></strong>
+                        </div>
+                        <div class="usage-stat">
+                            <span><?php echo h($previousMonthKey); ?></span>
+                            <strong><?php echo n(array_sum(array_column($almaByUniversity, 'previous'))); ?></strong>
+                        </div>
+                    </div>
                     <table class="mini-table">
                         <thead>
                             <tr>
@@ -888,7 +881,6 @@ $usageChartData = [
                             <?php endforeach; ?>
                         </tbody>
                     </table>
-                    <div class="chart-wrap"><canvas id="almaByUniversityChart"></canvas></div>
                 <?php endif; ?>
             </div>
         </article>
@@ -901,11 +893,7 @@ const chartColors = {
     blue: '#2563eb',
     teal: '#0f766e',
     amber: '#d97706',
-    red: '#dc2626',
-    green: '#16a34a',
-    slate: '#64748b',
     lightBlue: 'rgba(37, 99, 235, 0.16)',
-    lightTeal: 'rgba(15, 118, 110, 0.16)',
     lightAmber: 'rgba(217, 119, 6, 0.18)',
     lightGreen: 'rgba(22, 163, 74, 0.16)'
 };
@@ -919,68 +907,17 @@ function makeChart(id, config) {
     new Chart(canvas, config);
 }
 
-function smallGauge(id, value, max, color) {
-    makeChart(id, {
-        type: 'doughnut',
-        data: {
-            labels: ['Count', 'Remaining'],
-            datasets: [{
-                data: [Math.max(value, 0), Math.max(max - value, 0)],
-                backgroundColor: [color, '#e5edf2'],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            cutout: '72%',
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { enabled: false } }
-        }
-    });
-}
-
-const crosscheckCount = <?php echo json_encode((int)$crosscheckCount); ?>;
-const processedSevenDays = <?php echo json_encode((int)$processedSevenDays); ?>;
-const holdShelfCount = <?php echo json_encode(is_array($holdShelfRows) ? count($holdShelfRows) : 0); ?>;
-const almaGrandTotal = <?php echo json_encode((int)$almaGrandTotal); ?>;
-const refileErrorCount = <?php echo json_encode(is_array($refileErrors) ? count($refileErrors['rows']) : 0); ?>;
-const billingChartData = <?php echo json_encode($billingChartData, JSON_NUMERIC_CHECK); ?>;
-const refileChartData = <?php echo json_encode($refileChartData, JSON_NUMERIC_CHECK); ?>;
-const almaChartData = <?php echo json_encode($almaChartData, JSON_NUMERIC_CHECK); ?>;
 const usageChartData = <?php echo json_encode($usageChartData, JSON_NUMERIC_CHECK); ?>;
-
-smallGauge('workloadChart', crosscheckCount, Math.max(crosscheckCount + processedSevenDays, 1), chartColors.amber);
-smallGauge('processedChart', processedSevenDays, Math.max(crosscheckCount + processedSevenDays, 1), chartColors.green);
-smallGauge('holdShelfChart', holdShelfCount, Math.max(holdShelfCount + 25, 1), chartColors.blue);
-smallGauge('almaTotalChart', almaGrandTotal, Math.max(almaGrandTotal, 1), chartColors.teal);
 
 makeChart('usageCubicFeetChart', {
     type: 'bar',
     data: {
         labels: usageChartData.labels,
         datasets: [
-            { label: 'Cu Ft Used', data: usageChartData.used, backgroundColor: chartColors.blue, borderRadius: 5 },
-            { label: 'Space Remaining', data: usageChartData.remaining, backgroundColor: chartColors.lightGreen, borderRadius: 5 }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            x: { stacked: true, grid: { display: false } },
-            y: { stacked: true, ticks: { callback: value => Number(value).toLocaleString() } }
-        },
-        plugins: { legend: { position: 'bottom' } }
-    }
-});
-
-makeChart('billingChart', {
-    type: 'bar',
-    data: {
-        labels: billingChartData.labels,
-        datasets: [
-            { label: 'Items', data: billingChartData.items, backgroundColor: chartColors.teal, borderRadius: 5 },
-            { label: 'Estimated Billing', data: billingChartData.value, backgroundColor: chartColors.lightAmber, borderRadius: 5, yAxisID: 'y1' }
+            { label: 'University Total Cu Ft', data: usageChartData.total, backgroundColor: chartColors.lightBlue, borderRadius: 5 },
+            { label: 'Cu Ft Used (SCF 1,2,3)', data: usageChartData.used, backgroundColor: chartColors.blue, borderRadius: 5 },
+            { label: 'Cu Ft Reserved (SCF 2,3)', data: usageChartData.reserved, backgroundColor: chartColors.amber, borderRadius: 5 },
+            { label: 'Cu Ft Remaining', data: usageChartData.remaining, backgroundColor: chartColors.lightGreen, borderRadius: 5 }
         ]
     },
     options: {
@@ -988,46 +925,33 @@ makeChart('billingChart', {
         maintainAspectRatio: false,
         scales: {
             x: { grid: { display: false } },
-            y: { beginAtZero: true, ticks: { callback: value => Number(value).toLocaleString() } },
-            y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: value => '$' + Number(value).toLocaleString() } }
+            y: { beginAtZero: true, ticks: { callback: value => Number(value).toLocaleString() } }
         },
         plugins: { legend: { position: 'bottom' } }
     }
 });
 
-makeChart('refileSummaryChart', {
-    type: 'line',
-    data: {
-        labels: refileChartData.labels,
-        datasets: [
-            { label: 'Step 1', data: refileChartData.step1, borderColor: chartColors.blue, backgroundColor: chartColors.lightBlue, tension: .35, fill: true },
-            { label: 'Step 2', data: refileChartData.step2, borderColor: chartColors.teal, backgroundColor: chartColors.lightTeal, tension: .35, fill: true }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: { x: { grid: { display: false } }, y: { beginAtZero: true } },
-        plugins: { legend: { position: 'bottom' } }
-    }
-});
-
-smallGauge('refileErrorsChart', refileErrorCount, Math.max(refileErrorCount + 10, 1), chartColors.red);
-
-makeChart('almaByUniversityChart', {
+makeChart('usagePercentChart', {
     type: 'bar',
     data: {
-        labels: almaChartData.labels,
-        datasets: [
-            { label: 'Overall', data: almaChartData.overall, backgroundColor: chartColors.blue, borderRadius: 5 },
-            { label: '<?php echo h($currentMonthKey); ?>', data: almaChartData.current, backgroundColor: chartColors.teal, borderRadius: 5 },
-            { label: '<?php echo h($previousMonthKey); ?>', data: almaChartData.previous, backgroundColor: chartColors.amber, borderRadius: 5 }
-        ]
+        labels: usageChartData.labels,
+        datasets: [{
+            label: 'Percent Used',
+            data: usageChartData.percent,
+            backgroundColor: chartColors.teal,
+            borderRadius: 5
+        }]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
-        scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { callback: value => Number(value).toLocaleString() } } },
+        scales: {
+            x: { grid: { display: false } },
+            y: {
+                beginAtZero: true,
+                ticks: { callback: value => Number(value).toLocaleString() + '%' }
+            }
+        },
         plugins: { legend: { position: 'bottom' } }
     }
 });
