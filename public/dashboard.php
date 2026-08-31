@@ -567,10 +567,130 @@ $usageChartData = [
     border-radius: 8px;
     box-shadow: 0 14px 35px rgba(31, 41, 55, 0.07);
     overflow: hidden;
+    position: relative;
+}
+
+.dash-card:before {
+    content: '';
+    display: block;
+    height: 4px;
 }
 
 .dash-card .card-content {
     padding: 22px;
+}
+
+.theme-amber {
+    background: #fffaf0;
+    border-color: #fde7bd;
+}
+
+.theme-amber:before,
+.theme-amber .card-icon {
+    background: #f59e0b;
+}
+
+.theme-green {
+    background: #f7fdf9;
+    border-color: #cdeed7;
+}
+
+.theme-green:before,
+.theme-green .card-icon {
+    background: #16a34a;
+}
+
+.theme-blue {
+    background: #f7fbff;
+    border-color: #cfe5ff;
+}
+
+.theme-blue:before,
+.theme-blue .card-icon {
+    background: #2563eb;
+}
+
+.theme-teal {
+    background: #f5fcfb;
+    border-color: #c9ebe6;
+}
+
+.theme-teal:before,
+.theme-teal .card-icon {
+    background: #0f766e;
+}
+
+.theme-purple {
+    background: #fbf8ff;
+    border-color: #e7d7ff;
+}
+
+.theme-purple:before,
+.theme-purple .card-icon {
+    background: #7c3aed;
+}
+
+.theme-slate {
+    background: #f8fafc;
+    border-color: #dbe4ee;
+}
+
+.theme-slate:before,
+.theme-slate .card-icon {
+    background: #475569;
+}
+
+.theme-rose {
+    background: #fff7f8;
+    border-color: #ffd6de;
+}
+
+.theme-rose:before,
+.theme-rose .card-icon {
+    background: #e11d48;
+}
+
+.theme-indigo {
+    background: #f8f9ff;
+    border-color: #d9defd;
+}
+
+.theme-indigo:before,
+.theme-indigo .card-icon {
+    background: #4f46e5;
+}
+
+.theme-cyan {
+    background: #f4fbfd;
+    border-color: #c7edf5;
+}
+
+.theme-cyan:before,
+.theme-cyan .card-icon {
+    background: #0891b2;
+}
+
+.metric-head {
+    align-items: flex-start;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.card-icon {
+    align-items: center;
+    border-radius: 8px;
+    box-shadow: 0 10px 22px rgba(31, 41, 55, .14);
+    color: #fff;
+    display: inline-flex;
+    flex: 0 0 46px;
+    height: 46px;
+    justify-content: center;
+    width: 46px;
+}
+
+.card-icon .material-icons {
+    font-size: 26px;
 }
 
 .span-3 { grid-column: span 3; }
@@ -604,6 +724,12 @@ $usageChartData = [
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 16px;
+}
+
+.card-title-group {
+    align-items: center;
+    display: flex;
+    gap: 12px;
 }
 
 .card-topline h2 {
@@ -802,6 +928,11 @@ $usageChartData = [
         flex-direction: column;
     }
 
+    .card-topline {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
     .summary-row {
         grid-template-columns: 1fr;
     }
@@ -822,46 +953,61 @@ $usageChartData = [
     </section>
 
     <section class="dashboard-grid">
-        <article class="dash-card span-3">
+        <article class="dash-card theme-amber span-3">
             <div class="card-content">
-                <div class="metric-label">Unprocessed Crosscheck</div>
+                <div class="metric-head">
+                    <div class="metric-label">Unprocessed Crosscheck</div>
+                    <span class="card-icon"><i class="material-icons">fact_check</i></span>
+                </div>
                 <div class="metric-value"><?php echo n($crosscheckCount); ?></div>
                 <div class="metric-sub">Items waiting for crosscheck</div>
                 <a class="pill-link" href="crosscheck.php"><i class="material-icons tiny">open_in_new</i>Open crosscheck</a>
             </div>
         </article>
 
-        <article class="dash-card span-3">
+        <article class="dash-card theme-green span-3">
             <div class="card-content">
-                <div class="metric-label">Processed Last 7 Days</div>
+                <div class="metric-head">
+                    <div class="metric-label">Processed Last 7 Days</div>
+                    <span class="card-icon"><i class="material-icons">playlist_add_check</i></span>
+                </div>
                 <div class="metric-value"><?php echo n($processedSevenDays); ?></div>
                 <div class="metric-sub">Items from the processing list</div>
                 <a class="pill-link" href="list.php?order=ptimestamp&sort=DESC&date=WEEK"><i class="material-icons tiny">open_in_new</i>Open list</a>
             </div>
         </article>
 
-        <article class="dash-card span-3">
+        <article class="dash-card theme-blue span-3">
             <div class="card-content">
-                <div class="metric-label">Hold Shelf</div>
+                <div class="metric-head">
+                    <div class="metric-label">Hold Shelf</div>
+                    <span class="card-icon"><i class="material-icons">inventory_2</i></span>
+                </div>
                 <div class="metric-value"><?php echo is_array($holdShelfRows) ? n(count($holdShelfRows)) : '-'; ?></div>
                 <div class="metric-sub"><?php echo is_array($holdShelfRows) ? 'Items currently on hold shelf' : 'Alma feed unavailable'; ?></div>
                 <a class="pill-link" href="refile/hold_shelf.php"><i class="material-icons tiny">open_in_new</i>Open hold shelf</a>
             </div>
         </article>
 
-        <article class="dash-card span-3">
+        <article class="dash-card theme-teal span-3">
             <div class="card-content">
-                <div class="metric-label">Alma Refile Total</div>
+                <div class="metric-head">
+                    <div class="metric-label">Alma Refile Total</div>
+                    <span class="card-icon"><i class="material-icons">library_books</i></span>
+                </div>
                 <div class="metric-value"><?php echo is_array($almaStatsRows) ? n($almaGrandTotal) : '-'; ?></div>
                 <div class="metric-sub"><?php echo is_array($almaStatsRows) ? 'Overall count from Alma stats' : 'Alma feed unavailable'; ?></div>
                 <a class="pill-link" href="refile/refile_month.php"><i class="material-icons tiny">open_in_new</i>Open Alma stats</a>
             </div>
         </article>
 
-        <article class="dash-card span-12">
+        <article class="dash-card theme-purple span-12">
             <div class="card-content">
                 <div class="card-topline">
-                    <h2>SCF Total Usage Summary by Cubic Feet</h2>
+                    <div class="card-title-group">
+                        <span class="card-icon"><i class="material-icons">warehouse</i></span>
+                        <h2>SCF Total Usage Summary by Cubic Feet</h2>
+                    </div>
                     <a class="pill-link" target="_blank" href="https://docs.google.com/spreadsheets/d/1NBWussFHVyPFBbNJf_sWofqzjlOWQjdFgt2AYGXs21k/edit?gid=1128396276#gid=1128396276"><i class="material-icons tiny">open_in_new</i>Open sheet</a>
                 </div>
                 <?php if (!is_array($usageSummary) || !is_array($usageSummary['total'])): ?>
@@ -917,10 +1063,13 @@ $usageChartData = [
             </div>
         </article>
 
-        <article class="dash-card span-6">
+        <article class="dash-card theme-slate span-6">
             <div class="card-content">
                 <div class="card-topline">
-                    <h2>Billing Counts</h2>
+                    <div class="card-title-group">
+                        <span class="card-icon"><i class="material-icons">request_quote</i></span>
+                        <h2>Billing Counts</h2>
+                    </div>
                     <a class="pill-link" href="<?php echo h($billingMonths[0]['url']); ?>"><i class="material-icons tiny">open_in_new</i>Open current month</a>
                 </div>
                 <table class="mini-table">
@@ -946,10 +1095,13 @@ $usageChartData = [
             </div>
         </article>
 
-        <article class="dash-card span-6">
+        <article class="dash-card theme-cyan span-6">
             <div class="card-content">
                 <div class="card-topline">
-                    <h2>Refile Summary</h2>
+                    <div class="card-title-group">
+                        <span class="card-icon"><i class="material-icons">summarize</i></span>
+                        <h2>Refile Summary</h2>
+                    </div>
                     <a class="pill-link" href="refile/refile_summary.php"><i class="material-icons tiny">open_in_new</i>Open summary</a>
                 </div>
                 <div class="summary-row">
@@ -963,10 +1115,13 @@ $usageChartData = [
             </div>
         </article>
 
-        <article class="dash-card span-12">
+        <article class="dash-card theme-indigo span-12">
             <div class="card-content">
                 <div class="card-topline">
-                    <h2>Sent ILL Digitization Requests</h2>
+                    <div class="card-title-group">
+                        <span class="card-icon"><i class="material-icons">outgoing_mail</i></span>
+                        <h2>Sent ILL Digitization Requests</h2>
+                    </div>
                     <a class="pill-link" target="_blank" href="https://docs.google.com/spreadsheets/d/1C6fqK_kM8QqyszZKc831m9Tnci3h0lBXxDo3qBq0A4Y/edit?usp=sharing"><i class="material-icons tiny">open_in_new</i>Open sheet</a>
                 </div>
                 <?php if (!is_array($sentIllRequests)): ?>
@@ -1012,10 +1167,13 @@ $usageChartData = [
             </div>
         </article>
 
-        <article class="dash-card span-6">
+        <article class="dash-card theme-rose span-6">
             <div class="card-content">
                 <div class="card-topline">
-                    <h2>Refile Errors Missing Notes</h2>
+                    <div class="card-title-group">
+                        <span class="card-icon"><i class="material-icons">error_outline</i></span>
+                        <h2>Refile Errors Missing Notes</h2>
+                    </div>
                     <a class="pill-link" href="refile/refile_errors.php"><i class="material-icons tiny">open_in_new</i>Open errors</a>
                 </div>
                 <?php if ($refileErrors === null): ?>
@@ -1037,10 +1195,13 @@ $usageChartData = [
             </div>
         </article>
 
-        <article class="dash-card span-6">
+        <article class="dash-card theme-teal span-6">
             <div class="card-content">
                 <div class="card-topline">
-                    <h2>Alma Refile Stats by Owning University</h2>
+                    <div class="card-title-group">
+                        <span class="card-icon"><i class="material-icons">account_balance</i></span>
+                        <h2>Alma Refile Stats by Owning University</h2>
+                    </div>
                     <a class="pill-link" href="refile/refile_month.php"><i class="material-icons tiny">open_in_new</i>Open monthly stats</a>
                 </div>
                 <?php if (!is_array($almaStatsRows)): ?>
