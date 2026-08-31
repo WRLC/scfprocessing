@@ -106,6 +106,8 @@ $billingmonth = '?begin='.$month.' 01, '.$year.'&end='.$month.' '.$lastday.', '.
   <ul id="dropdown-reports" class="dropdown-content">
     <!--<li><a href="list.php">Daily List</a></li>
     <li class="divider"></li>-->
+    <li><a href="dashboard.php">Dashboard</a></li>
+    <li class="divider"></li>
     <li><a href="list.php?order=ptimestamp&sort=DESC&date=WEEK">Edit Processing Records</a></li>
     <li class="divider"></li>
     <li><a href="export-form.php">Export to CSV</a></li>
