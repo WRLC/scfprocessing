@@ -561,9 +561,7 @@ $usageChartData = [
 }
 
 .span-3 { grid-column: span 3; }
-.span-4 { grid-column: span 4; }
 .span-6 { grid-column: span 6; }
-.span-8 { grid-column: span 8; }
 .span-12 { grid-column: span 12; }
 
 .metric-label {
@@ -705,45 +703,6 @@ $usageChartData = [
     margin-top: 4px;
 }
 
-.month-stack {
-    display: grid;
-    gap: 14px;
-}
-
-.month-panel {
-    border: 1px solid #edf2f7;
-    border-radius: 8px;
-    padding: 14px;
-}
-
-.month-panel-head {
-    align-items: baseline;
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 10px;
-}
-
-.month-panel-head strong {
-    color: #111827;
-    font-size: 1.15rem;
-}
-
-.recipient-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 0;
-}
-
-.recipient-list li {
-    background: #f8fafc;
-    border: 1px solid #edf2f7;
-    border-radius: 999px;
-    color: #374151;
-    padding: 6px 10px;
-}
-
 .error-list {
     margin: 0;
 }
@@ -770,9 +729,7 @@ $usageChartData = [
 
 @media only screen and (max-width: 1000px) {
     .span-3,
-    .span-4,
-    .span-6,
-    .span-8 {
+    .span-6 {
         grid-column: span 12;
     }
 
@@ -928,42 +885,6 @@ $usageChartData = [
         <article class="dash-card span-6">
             <div class="card-content">
                 <div class="card-topline">
-                    <h2>Sent ILL Digitization Requests</h2>
-                    <a class="pill-link" target="_blank" href="https://docs.google.com/spreadsheets/d/1C6fqK_kM8QqyszZKc831m9Tnci3h0lBXxDo3qBq0A4Y/edit?usp=sharing"><i class="material-icons tiny">open_in_new</i>Open sheet</a>
-                </div>
-                <?php if (!is_array($sentIllRequests)): ?>
-                    <div class="status-note">ILL digitization Sheet feed unavailable.</div>
-                <?php else: ?>
-                    <div class="usage-stat" style="margin-bottom:14px;">
-                        <span>All Months Combined</span>
-                        <strong><?php echo n($sentIllRequests['total']); ?></strong>
-                    </div>
-                    <div class="month-stack">
-                        <?php foreach ($sentIllRequests['months'] as $month): ?>
-                            <div class="month-panel">
-                                <div class="month-panel-head">
-                                    <strong><?php echo h($month['month']); ?></strong>
-                                    <span class="muted"><?php echo n($month['total']); ?> sent</span>
-                                </div>
-                                <?php if (empty($month['recipients'])): ?>
-                                    <span class="muted">No recipients listed.</span>
-                                <?php else: ?>
-                                    <ul class="recipient-list">
-                                        <?php foreach ($month['recipients'] as $recipient): ?>
-                                            <li><?php echo h($recipient['name']); ?>: <?php echo n($recipient['count']); ?></li>
-                                        <?php endforeach; ?>
-                                    </ul>
-                                <?php endif; ?>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </article>
-
-        <article class="dash-card span-6">
-            <div class="card-content">
-                <div class="card-topline">
                     <h2>Refile Summary</h2>
                     <a class="pill-link" href="refile/refile_summary.php"><i class="material-icons tiny">open_in_new</i>Open summary</a>
                 </div>
@@ -978,7 +899,55 @@ $usageChartData = [
             </div>
         </article>
 
-        <article class="dash-card span-4">
+        <article class="dash-card span-12">
+            <div class="card-content">
+                <div class="card-topline">
+                    <h2>Sent ILL Digitization Requests</h2>
+                    <a class="pill-link" target="_blank" href="https://docs.google.com/spreadsheets/d/1C6fqK_kM8QqyszZKc831m9Tnci3h0lBXxDo3qBq0A4Y/edit?usp=sharing"><i class="material-icons tiny">open_in_new</i>Open sheet</a>
+                </div>
+                <?php if (!is_array($sentIllRequests)): ?>
+                    <div class="status-note">ILL digitization Sheet feed unavailable.</div>
+                <?php else: ?>
+                    <div class="usage-stat" style="margin-bottom:14px;">
+                        <span>All Months Combined</span>
+                        <strong><?php echo n($sentIllRequests['total']); ?></strong>
+                    </div>
+                    <table class="mini-table">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Monthly Total</th>
+                                <th>Recipient</th>
+                                <th>Recipient Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($sentIllRequests['months'] as $month): ?>
+                                <?php if (empty($month['recipients'])): ?>
+                                    <tr>
+                                        <td><?php echo h($month['month']); ?></td>
+                                        <td><?php echo n($month['total']); ?></td>
+                                        <td class="muted">No recipients listed</td>
+                                        <td>0</td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($month['recipients'] as $index => $recipient): ?>
+                                        <tr>
+                                            <td><?php echo $index === 0 ? h($month['month']) : ''; ?></td>
+                                            <td><?php echo $index === 0 ? n($month['total']) : ''; ?></td>
+                                            <td><?php echo h($recipient['name']); ?></td>
+                                            <td><?php echo n($recipient['count']); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+            </div>
+        </article>
+
+        <article class="dash-card span-6">
             <div class="card-content">
                 <div class="card-topline">
                     <h2>Refile Errors Missing Notes</h2>
@@ -1003,7 +972,7 @@ $usageChartData = [
             </div>
         </article>
 
-        <article class="dash-card span-8">
+        <article class="dash-card span-6">
             <div class="card-content">
                 <div class="card-topline">
                     <h2>Alma Refile Stats by Owning University</h2>
