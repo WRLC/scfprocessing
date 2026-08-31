@@ -345,6 +345,95 @@ function fetchUsageSummaryByCubicFeet(): ?array
     return ['rows' => $rows, 'total' => $total];
 }
 
+function fetchSentIllDigitizationRequests(): ?array
+{
+    $jsonKey = $_ENV['GOOGLE_SHEET'] ?? getenv('GOOGLE_SHEET');
+    if (!$jsonKey) {
+        return null;
+    }
+
+    $spreadsheetId = '1C6fqK_kM8QqyszZKc831m9Tnci3h0lBXxDo3qBq0A4Y';
+    $metadataUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' . $spreadsheetId
+        . '?fields=sheets.properties.title&key=' . urlencode((string)$jsonKey);
+    $metadataJson = @file_get_contents($metadataUrl);
+    if ($metadataJson === false) {
+        return null;
+    }
+
+    $metadata = json_decode($metadataJson, true);
+    if (!isset($metadata['sheets']) || !is_array($metadata['sheets'])) {
+        return null;
+    }
+
+    $months = [];
+    foreach ($metadata['sheets'] as $sheet) {
+        $title = (string)($sheet['properties']['title'] ?? '');
+        if (preg_match('/^[A-Za-z]+ \d{4}$/', $title)) {
+            $months[] = $title;
+        }
+    }
+
+    usort($months, function (string $a, string $b): int {
+        return strtotime('1 ' . $b) <=> strtotime('1 ' . $a);
+    });
+
+    $summary = [];
+    $grandTotal = 0;
+
+    foreach ($months as $monthTitle) {
+        $range = rawurlencode("'" . str_replace("'", "''", $monthTitle) . "'!A1:Z1000");
+        $url = 'https://sheets.googleapis.com/v4/spreadsheets/' . $spreadsheetId
+            . '/values/' . $range
+            . '?valueRenderOption=FORMATTED_VALUE&key=' . urlencode((string)$jsonKey);
+        $json = @file_get_contents($url);
+        if ($json === false) {
+            continue;
+        }
+
+        $data = json_decode($json, true);
+        $values = isset($data['values']) && is_array($data['values']) ? $data['values'] : [];
+        $monthlyTotal = 0;
+        $recipients = [];
+        $detailHeaderIndex = null;
+
+        foreach ($values as $rowIndex => $row) {
+            if (($row[0] ?? '') === 'Sent Emails With Attachments' && is_numeric($row[1] ?? null)) {
+                $monthlyTotal = (int)$row[1];
+            }
+
+            if (($row[0] ?? '') === 'Date/Time') {
+                $detailHeaderIndex = $rowIndex;
+            }
+
+            $recipientName = trim((string)($row[6] ?? ''));
+            $recipientCount = trim((string)($row[7] ?? ''));
+            if ($recipientName !== '' && strtolower($recipientName) !== 'value' && is_numeric($recipientCount)) {
+                $recipients[] = [
+                    'name' => $recipientName,
+                    'count' => (int)$recipientCount,
+                ];
+            }
+        }
+
+        if ($monthlyTotal === 0 && $detailHeaderIndex !== null) {
+            for ($i = $detailHeaderIndex + 1; $i < count($values); $i++) {
+                if (trim((string)($values[$i][0] ?? '')) !== '') {
+                    $monthlyTotal++;
+                }
+            }
+        }
+
+        $grandTotal += $monthlyTotal;
+        $summary[] = [
+            'month' => $monthTitle,
+            'total' => $monthlyTotal,
+            'recipients' => $recipients,
+        ];
+    }
+
+    return ['months' => $summary, 'total' => $grandTotal];
+}
+
 $today = new DateTimeImmutable('today');
 $previousMonthStartDate = $today->modify('first day of previous month');
 
@@ -368,6 +457,7 @@ $processedSevenDays = scalarQuery($conn, "SELECT COUNT(*) FROM ProcessingAll WHE
 $refileSummary = refileSummaryCounts(readRefileNdjson());
 $refileErrors = fetchRefileErrorsWithoutNotes();
 $usageSummary = fetchUsageSummaryByCubicFeet();
+$sentIllRequests = fetchSentIllDigitizationRequests();
 
 $holdShelfRows = null;
 if (!empty($api_key)) {
@@ -615,6 +705,45 @@ $usageChartData = [
     margin-top: 4px;
 }
 
+.month-stack {
+    display: grid;
+    gap: 14px;
+}
+
+.month-panel {
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    padding: 14px;
+}
+
+.month-panel-head {
+    align-items: baseline;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.month-panel-head strong {
+    color: #111827;
+    font-size: 1.15rem;
+}
+
+.recipient-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+}
+
+.recipient-list li {
+    background: #f8fafc;
+    border: 1px solid #edf2f7;
+    border-radius: 999px;
+    color: #374151;
+    padding: 6px 10px;
+}
+
 .error-list {
     margin: 0;
 }
@@ -793,6 +922,42 @@ $usageChartData = [
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            </div>
+        </article>
+
+        <article class="dash-card span-6">
+            <div class="card-content">
+                <div class="card-topline">
+                    <h2>Sent ILL Digitization Requests</h2>
+                    <a class="pill-link" target="_blank" href="https://docs.google.com/spreadsheets/d/1C6fqK_kM8QqyszZKc831m9Tnci3h0lBXxDo3qBq0A4Y/edit?usp=sharing"><i class="material-icons tiny">open_in_new</i>Open sheet</a>
+                </div>
+                <?php if (!is_array($sentIllRequests)): ?>
+                    <div class="status-note">ILL digitization Sheet feed unavailable.</div>
+                <?php else: ?>
+                    <div class="usage-stat" style="margin-bottom:14px;">
+                        <span>All Months Combined</span>
+                        <strong><?php echo n($sentIllRequests['total']); ?></strong>
+                    </div>
+                    <div class="month-stack">
+                        <?php foreach ($sentIllRequests['months'] as $month): ?>
+                            <div class="month-panel">
+                                <div class="month-panel-head">
+                                    <strong><?php echo h($month['month']); ?></strong>
+                                    <span class="muted"><?php echo n($month['total']); ?> sent</span>
+                                </div>
+                                <?php if (empty($month['recipients'])): ?>
+                                    <span class="muted">No recipients listed.</span>
+                                <?php else: ?>
+                                    <ul class="recipient-list">
+                                        <?php foreach ($month['recipients'] as $recipient): ?>
+                                            <li><?php echo h($recipient['name']); ?>: <?php echo n($recipient['count']); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
             </div>
         </article>
 
