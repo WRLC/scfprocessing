@@ -720,6 +720,57 @@ $usageChartData = [
     margin: 0;
 }
 
+.ill-accordion {
+    display: grid;
+    gap: 10px;
+}
+
+.ill-month {
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.ill-month summary {
+    align-items: center;
+    background: #f8fafc;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 14px;
+    list-style: none;
+    padding: 14px 16px;
+}
+
+.ill-month summary::-webkit-details-marker {
+    display: none;
+}
+
+.ill-month summary:after {
+    color: #1565c0;
+    content: 'expand_more';
+    font-family: 'Material Icons';
+    font-size: 22px;
+}
+
+.ill-month[open] summary:after {
+    content: 'expand_less';
+}
+
+.ill-month-title {
+    color: #111827;
+    font-weight: 800;
+}
+
+.ill-month-count {
+    color: #607d8b;
+    font-weight: 800;
+}
+
+.ill-month-body {
+    padding: 0 16px 12px;
+}
+
 .error-list li {
     border-top: 1px solid #edf2f7;
     padding: 12px 0;
@@ -925,37 +976,38 @@ $usageChartData = [
                         <span>All Months Combined</span>
                         <strong><?php echo n($sentIllRequests['total']); ?></strong>
                     </div>
-                    <table class="mini-table">
-                        <thead>
-                            <tr>
-                                <th>Month</th>
-                                <th>Monthly Total</th>
-                                <th>Recipient</th>
-                                <th>Recipient Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($sentIllRequests['months'] as $month): ?>
-                                <?php if (empty($month['recipients'])): ?>
-                                    <tr>
-                                        <td><?php echo h($month['month']); ?></td>
-                                        <td><?php echo n($month['total']); ?></td>
-                                        <td class="muted">No recipients listed</td>
-                                        <td>0</td>
-                                    </tr>
-                                <?php else: ?>
-                                    <?php foreach ($month['recipients'] as $index => $recipient): ?>
-                                        <tr>
-                                            <td><?php echo $index === 0 ? h($month['month']) : ''; ?></td>
-                                            <td><?php echo $index === 0 ? n($month['total']) : ''; ?></td>
-                                            <td><?php echo h($recipient['name']); ?></td>
-                                            <td><?php echo n($recipient['count']); ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                    <div class="ill-accordion">
+                        <?php foreach ($sentIllRequests['months'] as $month): ?>
+                            <details class="ill-month">
+                                <summary>
+                                    <span class="ill-month-title"><?php echo h($month['month']); ?></span>
+                                    <span class="ill-month-count"><?php echo n($month['total']); ?> sent</span>
+                                </summary>
+                                <div class="ill-month-body">
+                                    <?php if (empty($month['recipients'])): ?>
+                                        <p class="muted">No recipients listed.</p>
+                                    <?php else: ?>
+                                        <table class="mini-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Recipient</th>
+                                                    <th>Recipient Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($month['recipients'] as $recipient): ?>
+                                                    <tr>
+                                                        <td><?php echo h($recipient['name']); ?></td>
+                                                        <td><?php echo n($recipient['count']); ?></td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    <?php endif; ?>
+                                </div>
+                            </details>
+                        <?php endforeach; ?>
+                    </div>
                 <?php endif; ?>
             </div>
         </article>
