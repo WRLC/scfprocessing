@@ -393,8 +393,9 @@ function fetchSentIllDigitizationRequests(): ?array
         $data = json_decode($json, true);
         $values = isset($data['values']) && is_array($data['values']) ? $data['values'] : [];
         $monthlyTotal = 0;
-        $recipients = [];
+        $recipientCounts = [];
         $detailHeaderIndex = null;
+        $toColumnIndex = null;
 
         foreach ($values as $rowIndex => $row) {
             if (($row[0] ?? '') === 'Sent Emails With Attachments' && is_numeric($row[1] ?? null)) {
@@ -403,24 +404,36 @@ function fetchSentIllDigitizationRequests(): ?array
 
             if (($row[0] ?? '') === 'Date/Time') {
                 $detailHeaderIndex = $rowIndex;
-            }
-
-            $recipientName = trim((string)($row[6] ?? ''));
-            $recipientCount = trim((string)($row[7] ?? ''));
-            if ($recipientName !== '' && strtolower($recipientName) !== 'value' && is_numeric($recipientCount)) {
-                $recipients[] = [
-                    'name' => $recipientName,
-                    'count' => (int)$recipientCount,
-                ];
+                foreach ($row as $columnIndex => $header) {
+                    if (strtolower(trim((string)$header)) === 'to') {
+                        $toColumnIndex = $columnIndex;
+                        break;
+                    }
+                }
+                break;
             }
         }
 
-        if ($monthlyTotal === 0 && $detailHeaderIndex !== null) {
+        if ($detailHeaderIndex !== null && $toColumnIndex !== null) {
+            $monthlyTotal = 0;
             for ($i = $detailHeaderIndex + 1; $i < count($values); $i++) {
-                if (trim((string)($values[$i][0] ?? '')) !== '') {
-                    $monthlyTotal++;
+                $recipientName = trim((string)($values[$i][$toColumnIndex] ?? ''));
+                if ($recipientName === '') {
+                    continue;
                 }
+
+                $monthlyTotal++;
+                $recipientCounts[$recipientName] = ($recipientCounts[$recipientName] ?? 0) + 1;
             }
+        }
+
+        arsort($recipientCounts);
+        $recipients = [];
+        foreach ($recipientCounts as $recipientName => $recipientCount) {
+            $recipients[] = [
+                'name' => $recipientName,
+                'count' => $recipientCount,
+            ];
         }
 
         $grandTotal += $monthlyTotal;
