@@ -1,5 +1,7 @@
 <?php include 'include/access.php'; ?>
 <?php
+include 'include/refile_data_file.php';
+
 function h($value)
 {
     return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
@@ -500,7 +502,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['barcode'])) {
                             echo '</div>';
 
                             if (!$alreadyCheckedIn && $scanSucceeded) {
-                                $file = __DIR__ . '/refile.ndjson';
+                                $file = refileEnsurePersistentNdjson();
 
                                 if ($displayProcessType !== '') {
                                     $process_type_full = $status . ' - ' . $displayProcessType;

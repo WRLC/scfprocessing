@@ -2,9 +2,10 @@
 // ndjson_cleaner_dashboard.php
 include 'include/access.php';
 include 'include/admin_access.php';
+include 'include/refile_data_file.php';
 
-$inputFile = __DIR__ . '/refile.ndjson';
-$outputFile = __DIR__ . '/refile_cleaned.ndjson';
+$inputFile = refileEnsurePersistentNdjson();
+$outputFile = $inputFile . '.cleaned';
 $requiredKeys = ['date', 'name', 'barcode', 'tray barcode', 'status', 'step'];
 
 $cleanCount = 0;
@@ -62,7 +63,7 @@ if (isset($_GET['clean'])) {
     <h2>NDJSON Cleaner Dashboard</h2>
     <p class="alert alert-info"><?php echo htmlspecialchars($status); ?></p>
     <a href="?clean=1" class="btn btn-success">Run Cleaner</a>
-    <a href="refile.ndjson" target="_blank" class="btn btn-secondary">View NDJSON</a>
+    <a href="refile_file.php" target="_blank" class="btn btn-secondary">View NDJSON</a>
 </div>
 </body>
 </html>

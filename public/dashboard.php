@@ -16,6 +16,7 @@ if (time() > (int)$_SESSION['expire']) {
 
 include 'header.php';
 include 'refile/include/apikey.php';
+include 'refile/include/refile_data_file.php';
 
 if (!isset($conn) || !($conn instanceof mysqli)) {
     die('Database connection not available.');
@@ -108,7 +109,7 @@ function billingTotals(mysqli $conn, string $begin, string $end): array
 
 function readRefileNdjson(): array
 {
-    $file = __DIR__ . '/refile/refile.ndjson';
+    $file = refileEnsurePersistentNdjson();
     $data = [];
 
     if (!file_exists($file) || filesize($file) === 0) {

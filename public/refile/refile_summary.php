@@ -1,9 +1,10 @@
 <?php
 include 'include/access.php';
 include 'include/admin_access.php';
+include 'include/refile_data_file.php';
 
 // File path for the NDJSON file
-$file = __DIR__ . '/refile.ndjson';
+$file = refileEnsurePersistentNdjson();
 
 // Load the existing data from NDJSON file
 $data = [];
@@ -163,7 +164,7 @@ foreach ($data as $entry) {
         }
         ?>
 
-<a class="btn btn-info mb-3 mr-3" href="refile_summary2.php">Show All Records</a> <a class="btn btn-warning mb-3" href="refile.ndjson">View NDJSON</a>
+<a class="btn btn-info mb-3 mr-3" href="refile_summary2.php">Show All Records</a> <a class="btn btn-warning mb-3" href="refile_file.php">Download NDJSON</a>
     </div>
 </div>
 
@@ -171,7 +172,7 @@ foreach ($data as $entry) {
 // NDJSON Delete function
 function deleteEntry($timestamp, $identifier)
 {
-    $file = __DIR__ . '/refile.ndjson';
+    $file = refileEnsurePersistentNdjson();
     if (!file_exists($file)) return;
 
     $tempFile = $file . '.tmp';
