@@ -1070,27 +1070,35 @@ $usageChartData = [
             </div>
         </article>
 
-        <article class="dash-card theme-blue span-3">
+        <article class="dash-card theme-slate span-6">
             <div class="card-content">
-                <div class="metric-head">
-                    <div class="metric-label">Hold Shelf</div>
-                    <span class="card-icon"><i class="material-icons">inventory_2</i></span>
+                <div class="card-topline">
+                    <div class="card-title-group">
+                        <span class="card-icon"><i class="material-icons">request_quote</i></span>
+                        <h2>Billing Counts</h2>
+                    </div>
+                    <a class="pill-link" href="<?php echo h($billingMonths[0]['url']); ?>"><i class="material-icons tiny">open_in_new</i>Open current month</a>
                 </div>
-                <div class="metric-value"><?php echo is_array($holdShelfRows) ? n(count($holdShelfRows)) : '-'; ?></div>
-                <div class="metric-sub"><?php echo is_array($holdShelfRows) ? 'Items currently on hold shelf' : 'Alma feed unavailable'; ?></div>
-                <a class="pill-link" href="refile/hold_shelf.php"><i class="material-icons tiny">open_in_new</i>Open hold shelf</a>
-            </div>
-        </article>
-
-        <article class="dash-card theme-teal span-3">
-            <div class="card-content">
-                <div class="metric-head">
-                    <div class="metric-label">Alma Refile Total</div>
-                    <span class="card-icon"><i class="material-icons">library_books</i></span>
-                </div>
-                <div class="metric-value"><?php echo is_array($almaStatsRows) ? n($almaGrandTotal) : '-'; ?></div>
-                <div class="metric-sub"><?php echo is_array($almaStatsRows) ? 'Overall count from Alma stats' : 'Alma feed unavailable'; ?></div>
-                <a class="pill-link" href="refile/refile_month.php"><i class="material-icons tiny">open_in_new</i>Open Alma stats</a>
+                <table class="mini-table">
+                    <thead>
+                        <tr>
+                            <th>Period</th>
+                            <th>Items</th>
+                            <th>Estimated Billing</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($billingMonths as $billingMonth): ?>
+                            <tr>
+                                <td><?php echo h($billingMonth['label']); ?></td>
+                                <td><?php echo n($billingMonth['totals']['items']); ?></td>
+                                <td><?php echo money((float)$billingMonth['totals']['value']); ?></td>
+                                <td><a href="<?php echo h($billingMonth['url']); ?>">Open</a></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
         </article>
 
@@ -1153,58 +1161,6 @@ $usageChartData = [
                         </tbody>
                     </table>
                 <?php endif; ?>
-            </div>
-        </article>
-
-        <article class="dash-card theme-slate span-6">
-            <div class="card-content">
-                <div class="card-topline">
-                    <div class="card-title-group">
-                        <span class="card-icon"><i class="material-icons">request_quote</i></span>
-                        <h2>Billing Counts</h2>
-                    </div>
-                    <a class="pill-link" href="<?php echo h($billingMonths[0]['url']); ?>"><i class="material-icons tiny">open_in_new</i>Open current month</a>
-                </div>
-                <table class="mini-table">
-                    <thead>
-                        <tr>
-                            <th>Period</th>
-                            <th>Items</th>
-                            <th>Estimated Billing</th>
-                            <th>Details</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($billingMonths as $billingMonth): ?>
-                            <tr>
-                                <td><?php echo h($billingMonth['label']); ?></td>
-                                <td><?php echo n($billingMonth['totals']['items']); ?></td>
-                                <td><?php echo money((float)$billingMonth['totals']['value']); ?></td>
-                                <td><a href="<?php echo h($billingMonth['url']); ?>">Open</a></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </article>
-
-        <article class="dash-card theme-cyan span-6">
-            <div class="card-content">
-                <div class="card-topline">
-                    <div class="card-title-group">
-                        <span class="card-icon"><i class="material-icons">summarize</i></span>
-                        <h2>Refile Summary</h2>
-                    </div>
-                    <a class="pill-link" href="refile/refile_summary.php"><i class="material-icons tiny">open_in_new</i>Open summary</a>
-                </div>
-                <div class="summary-row">
-                    <?php foreach ($refileSummary as $label => $steps): ?>
-                        <div class="summary-tile">
-                            <span class="muted"><?php echo h($label); ?></span>
-                            <strong><?php echo n($steps[1]); ?> / <?php echo n($steps[2]); ?></strong>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
             </div>
         </article>
 
@@ -1298,6 +1254,52 @@ $usageChartData = [
             </div>
         </article>
 
+        <h2 class="section-heading"><i class="material-icons">restore_page</i>Refiles</h2>
+
+        <article class="dash-card theme-blue span-3">
+            <div class="card-content">
+                <div class="metric-head">
+                    <div class="metric-label">Hold Shelf</div>
+                    <span class="card-icon"><i class="material-icons">inventory_2</i></span>
+                </div>
+                <div class="metric-value"><?php echo is_array($holdShelfRows) ? n(count($holdShelfRows)) : '-'; ?></div>
+                <div class="metric-sub"><?php echo is_array($holdShelfRows) ? 'Items currently on hold shelf' : 'Alma feed unavailable'; ?></div>
+                <a class="pill-link" href="refile/hold_shelf.php"><i class="material-icons tiny">open_in_new</i>Open hold shelf</a>
+            </div>
+        </article>
+
+        <article class="dash-card theme-teal span-3">
+            <div class="card-content">
+                <div class="metric-head">
+                    <div class="metric-label">Alma Refile Total</div>
+                    <span class="card-icon"><i class="material-icons">library_books</i></span>
+                </div>
+                <div class="metric-value"><?php echo is_array($almaStatsRows) ? n($almaGrandTotal) : '-'; ?></div>
+                <div class="metric-sub"><?php echo is_array($almaStatsRows) ? 'Overall count from Alma stats' : 'Alma feed unavailable'; ?></div>
+                <a class="pill-link" href="refile/refile_month.php"><i class="material-icons tiny">open_in_new</i>Open Alma stats</a>
+            </div>
+        </article>
+
+        <article class="dash-card theme-cyan span-6">
+            <div class="card-content">
+                <div class="card-topline">
+                    <div class="card-title-group">
+                        <span class="card-icon"><i class="material-icons">summarize</i></span>
+                        <h2>Refile Summary</h2>
+                    </div>
+                    <a class="pill-link" href="refile/refile_summary.php"><i class="material-icons tiny">open_in_new</i>Open summary</a>
+                </div>
+                <div class="summary-row">
+                    <?php foreach ($refileSummary as $label => $steps): ?>
+                        <div class="summary-tile">
+                            <span class="muted"><?php echo h($label); ?></span>
+                            <strong><?php echo n($steps[1]); ?> / <?php echo n($steps[2]); ?></strong>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </article>
+
         <article class="dash-card theme-rose span-6">
             <div class="card-content">
                 <div class="card-topline">
@@ -1384,6 +1386,8 @@ const chartColors = {
     blue: '#2563eb',
     teal: '#0f766e',
     amber: '#d97706',
+    red: '#dc2626',
+    yellow: '#facc15',
     lightBlue: 'rgba(37, 99, 235, 0.16)',
     lightAmber: 'rgba(217, 119, 6, 0.18)',
     lightGreen: 'rgba(22, 163, 74, 0.16)'
@@ -1399,6 +1403,26 @@ function makeChart(id, config) {
 }
 
 const usageChartData = <?php echo json_encode($usageChartData, JSON_NUMERIC_CHECK); ?>;
+const hundredLinePlugin = {
+    id: 'hundredLine',
+    afterDraw(chart) {
+        const yScale = chart.scales.y;
+        if (!yScale || yScale.min > 100 || yScale.max < 100) return;
+
+        const y = yScale.getPixelForValue(100);
+        const area = chart.chartArea;
+        const ctx = chart.ctx;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(area.left, y);
+        ctx.lineTo(area.right, y);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = chartColors.red;
+        ctx.stroke();
+        ctx.restore();
+    }
+};
 
 makeChart('usageCubicFeetChart', {
     type: 'bar',
@@ -1429,7 +1453,11 @@ makeChart('usagePercentChart', {
         datasets: [{
             label: 'Percent Used',
             data: usageChartData.percent,
-            backgroundColor: chartColors.teal,
+            backgroundColor: usageChartData.percent.map(value => {
+                if (value > 100) return chartColors.red;
+                if (value >= 95) return chartColors.yellow;
+                return chartColors.teal;
+            }),
             borderRadius: 5
         }]
     },
@@ -1440,11 +1468,17 @@ makeChart('usagePercentChart', {
             x: { grid: { display: false } },
             y: {
                 beginAtZero: true,
+                suggestedMax: Math.max(120, ...usageChartData.percent),
+                grid: {
+                    color: context => context.tick.value === 100 ? chartColors.red : 'rgba(96, 125, 139, .18)',
+                    lineWidth: context => context.tick.value === 100 ? 3 : 1
+                },
                 ticks: { callback: value => Number(value).toLocaleString() + '%' }
             }
         },
         plugins: { legend: { position: 'bottom' } }
-    }
+    },
+    plugins: [hundredLinePlugin]
 });
 </script>
 
