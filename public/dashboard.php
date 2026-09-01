@@ -1455,7 +1455,7 @@ makeChart('usagePercentChart', {
             data: usageChartData.percent,
             backgroundColor: usageChartData.percent.map(value => {
                 if (value > 100) return chartColors.red;
-                if (value >= 95) return chartColors.yellow;
+                if (value >= 90) return chartColors.yellow;
                 return chartColors.teal;
             }),
             borderRadius: 5
