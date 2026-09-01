@@ -339,7 +339,7 @@ function fetchUsageSummaryByCubicFeet(): ?array
     }
 
     usort($rows, function (array $a, array $b): int {
-        return $b['used'] <=> $a['used'];
+        return strnatcasecmp($a['university'], $b['university']);
     });
 
     return ['rows' => $rows, 'total' => $total];
@@ -584,6 +584,11 @@ if (is_array($almaStatsRows)) {
 }
 
 $usageChartRows = is_array($usageSummary) ? $usageSummary['rows'] : [];
+$usageCubicFeetChartRows = $usageChartRows;
+usort($usageCubicFeetChartRows, function (array $a, array $b): int {
+    return $b['used'] <=> $a['used'];
+});
+
 $usageChartData = [
     'labels' => array_map(fn($row) => $row['university'], $usageChartRows),
     'total' => array_map(fn($row) => (float)$row['total_cu_ft'], $usageChartRows),
@@ -591,6 +596,13 @@ $usageChartData = [
     'reserved' => array_map(fn($row) => (float)$row['reserved'], $usageChartRows),
     'remaining' => array_map(fn($row) => max(0, (float)($row['remaining'] ?? 0)), $usageChartRows),
     'percent' => array_map(fn($row) => round((float)$row['percent_used'] * 100, 1), $usageChartRows),
+];
+$usageCubicFeetChartData = [
+    'labels' => array_map(fn($row) => $row['university'], $usageCubicFeetChartRows),
+    'total' => array_map(fn($row) => (float)$row['total_cu_ft'], $usageCubicFeetChartRows),
+    'used' => array_map(fn($row) => (float)$row['used'], $usageCubicFeetChartRows),
+    'reserved' => array_map(fn($row) => (float)$row['reserved'], $usageCubicFeetChartRows),
+    'remaining' => array_map(fn($row) => max(0, (float)($row['remaining'] ?? 0)), $usageCubicFeetChartRows),
 ];
 ?>
 
@@ -1403,6 +1415,7 @@ function makeChart(id, config) {
 }
 
 const usageChartData = <?php echo json_encode($usageChartData, JSON_NUMERIC_CHECK); ?>;
+const usageCubicFeetChartData = <?php echo json_encode($usageCubicFeetChartData, JSON_NUMERIC_CHECK); ?>;
 const hundredLinePlugin = {
     id: 'hundredLine',
     afterDraw(chart) {
@@ -1427,12 +1440,12 @@ const hundredLinePlugin = {
 makeChart('usageCubicFeetChart', {
     type: 'bar',
     data: {
-        labels: usageChartData.labels,
+        labels: usageCubicFeetChartData.labels,
         datasets: [
-            { label: 'University Total Cu Ft', data: usageChartData.total, backgroundColor: chartColors.lightBlue, borderRadius: 5 },
-            { label: 'Cu Ft Used (SCF 1,2,3)', data: usageChartData.used, backgroundColor: chartColors.blue, borderRadius: 5 },
-            { label: 'Cu Ft Reserved (SCF 2,3)', data: usageChartData.reserved, backgroundColor: chartColors.amber, borderRadius: 5 },
-            { label: 'Cu Ft Remaining', data: usageChartData.remaining, backgroundColor: chartColors.lightGreen, borderRadius: 5 }
+            { label: 'University Total Cu Ft', data: usageCubicFeetChartData.total, backgroundColor: chartColors.lightBlue, borderRadius: 5 },
+            { label: 'Cu Ft Used (SCF 1,2,3)', data: usageCubicFeetChartData.used, backgroundColor: chartColors.blue, borderRadius: 5 },
+            { label: 'Cu Ft Reserved (SCF 2,3)', data: usageCubicFeetChartData.reserved, backgroundColor: chartColors.amber, borderRadius: 5 },
+            { label: 'Cu Ft Remaining', data: usageCubicFeetChartData.remaining, backgroundColor: chartColors.lightGreen, borderRadius: 5 }
         ]
     },
     options: {
